@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>知识递归学习引擎 (本地端)</title>
+    <style>
+        :root {
+            --primary: #007bff;
+            --primary-hover: #0056b3;
+            --disabled: #ccc;
+            --warning: #ffc107;
+            --danger: #dc3545;
+            --success: #28a745;
+            --bg: #f4f6f9;
+            --text: #333;
+            --card-bg: #fff;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .container {
+            max-width: 800px;
+            width: 100%;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            background-color: var(--primary);
+            color: white;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+
+        .btn:hover:not(.disabled) {
+            background-color: var(--primary-hover);
+        }
+
+        .btn-success {
+            background-color: var(--success);
+        }
+
+        .btn-success:hover {
+            background-color: #218838;
+        }
+
+        .btn-warning {
+            background-color: var(--warning);
+            color: #212529;
+        }
+
+        .btn-warning:hover {
+            background-color: #e0a800;
+        }
+
+        .btn-danger {
+            background-color: var(--danger);
+        }
+
+        .btn-danger:hover {
+            background-color: #c82333;
+        }
+
+        .disabled {
+            background: var(--disabled) !important;
+            cursor: not-allowed;
+            color: #666 !important;
+        }
+
+        .tip {
+            color: var(--danger);
+            font-size: 13px;
+            margin-top: 8px;
+        }
+
+        input[type="text"],
+        input[type="password"] {
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            width: 200px;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 12px;
+            background: #e9ecef;
+            font-size: 12px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+
+        .status-badge.free {
+            background: #6c757d;
+            color: white;
+        }
+
+        .status-badge.basic {
+            background: #17a2b8;
+            color: white;
+        }
+
+        .status-badge.pro {
+            background: #28a745;
+            color: white;
+        }
+
+        /* Toast */
+        #toast {
+            visibility: hidden;
+            min-width: 250px;
+            background-color: #333;
+            color: #fff;
+            text-align: center;
+            border-radius: 4px;
+            padding: 16px;
+            position: fixed;
+            z-index: 1000;
+            left: 50%;
+            bottom: 30px;
+            transform: translateX(-50%);
+        }
+
+        #toast.show {
+            visibility: visible;
+            -webkit-animation: fadein 0.5s, fadeout 0.5s 2.5s;
+            animation: fadein 0.5s, fadeout 0.5s 2.5s;
+        }
+
+        @keyframes fadein {
+            from {
+                bottom: 0;
+                opacity: 0;
+            }
+
+            to {
+                bottom: 30px;
+                opacity: 1;
+            }
+        }
+
+        .hidden {
+            display: None !important;
+        }
+
+        .auth-box {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <!-- 未登录视图 -->
+        {% if not user %}
+        <div class="header" id="loginView">
+            <h1>知识递归学习引擎</h1>
+            <p>云端鉴权 + 本地执行</p>
+            <div class="auth-box">
+                <input type="text" id="username" placeholder="请输入用户名">
+                <input type="password" id="password" placeholder="请输入密码">
+                <div style="margin-top: 10px;">
+                    <button class="btn" onclick="login()">登录</button>
+                    <button class="btn btn-warning" onclick="register()">注册</button>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <!-- 已登录视图 -->
+        <div id="mainView">
+            <div class="header">
+                <h1>知识递归学习引擎</h1>
+                <p>欢迎回来，{{ user.username }}！当前版本:
+                    <span class="status-badge {{ user.plan.name }}">{{ user.plan.name.upper() }}</span>
+                    <button class="btn btn-danger" style="padding: 4px 10px; font-size: 12px; margin-left:10px;"
+                        onclick="logout()">退出</button>
+                </p>
+                <div style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 15px;">
+                    <input type="text" id="redeemCode" placeholder="输入升级解锁码" style="margin:0; width:150px;">
+                    <button class="btn btn-warning" onclick="redeemKey()">卡密升级</button>
+                    <button class="btn btn-success" onclick="backupCloud()">备份至云端</button>
+                </div>
+            </div>
+
+            <!-- 控制面板：同前，但限制逻辑在后端 -->
+            <div class="card">
+                <h3>1. 创建知识领域</h3>
+                <p style="font-size: 13px; color: #666;">已创建领域：<span id="domainsCount">{{ counts.domains }}</span> / {%
+                    if user.plan.max_domains == -1 %}无限{% else %}{{ user.plan.max_domains }}{% endif %}</p>
+                <div style="display: flex; align-items: center; margin-top: 15px;">
+                    <input type="text" id="domainName" placeholder="输入领域名称">
+                    <button id="createDomainBtn" class="btn" onclick="createDomain()">创建领域</button>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>2. AI 递归出题</h3>
+                <p style="font-size: 13px; color: #666;">今日已出题：<span id="quizzesCount">{{ counts.today_quizzes }}</span>
+                    / {% if user.plan.quiz_daily_limit == -1 %}无限{% else %}{{ user.plan.quiz_daily_limit }}{% endif %}
+                </p>
+                <div style="margin-top: 15px;">
+                    <button id="quizBtn" class="btn" onclick="genQuiz()">AI 自动出题</button>
+                </div>
+                <div id="quizResult"
+                    style="margin-top: 15px; padding: 15px; background: #f8f9fa; border-radius: 6px; display: none; white-space: pre-wrap; font-size: 14px;">
+                </div>
+            </div>
+
+            <div class="card" style="text-align: center;">
+                <h3>3. 沉浸式知识网络学习</h3>
+                <p style="font-size: 13px; color: #666;">与AI对话，自动抽取专业术语生成本地私有知识图谱，本地执行不上传数据</p>
+                <p style="font-size: 13px; color: #666;">当前图谱节点数：{{ counts.terms }} / {% if user.plan.max_terms == -1
+                    %}无限{% else %}{{ user.plan.max_terms }}{% endif %}</p>
+                <div style="margin-top: 15px;">
+                    <button class="btn btn-success" style="width: 200px; padding: 12px; font-size: 16px;"
+                        onclick="window.location.href='/chat'">进入学习对话</button>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <div id="toast"></div>
+
+    <script>
+        function showToast(msg, isError = false) {
+            const toast = document.getElementById("toast");
+            toast.innerText = msg;
+            toast.style.backgroundColor = isError ? "#dc3545" : "#28a745";
+            toast.className = "show";
+            setTimeout(() => { toast.className = toast.className.replace("show", ""); }, 3000);
+        }
+
+        async function login() {
+            const u = document.getElementById('username').value;
+            const p = document.getElementById('password').value;
+            if (!u || !p) return showToast('请输入账号和密码', true);
+
+            const res = await fetch('/api/auth/login', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: u, password: p })
+            });
+            const data = await res.json();
+            if (data.code === 0) {
+                showToast('登录成功，正在刷新...');
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                showToast(data.msg, true);
+            }
+        }
+
+        async function register() {
+            const u = document.getElementById('username').value;
+            const p = document.getElementById('password').value;
+            if (!u || !p) return showToast('请输入完整', true);
+
+            const res = await fetch('/api/auth/register', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: u, password: p })
+            });
+            const data = await res.json();
+            showToast(data.msg, data.code !== 0);
+        }
+
+        async function logout() {
+            await fetch('/api/auth/logout', { method: 'POST' });
+            location.reload();
+        }
+
+        async function redeemKey() {
+            const code = document.getElementById('redeemCode').value;
+            if (!code) return showToast('请输入卡密', true);
+
+            const res = await fetch('/api/auth/redeem', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ key_code: code })
+            });
+            const data = await res.json();
+            if (data.code === 0) {
+                showToast(data.msg);
+                setTimeout(() => location.reload(), 1500);
+            } else {
+                showToast(data.msg, true);
+            }
+        }
+
+        async function backupCloud() {
+            showToast("正在打包本地数据并备份至云端...");
+            const res = await fetch('/api/backup/upload', { method: 'POST' });
+            const data = await res.json();
+            showToast(data.msg, data.code !== 0);
+        }
+
+        async function createDomain() {
+            const name = document.getElementById("domainName").value;
+            const res = await fetch("/api/domain/create", {
+                method: "POST", headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name || '新领域' })
+            });
+            const data = await res.json();
+            showToast(data.msg, data.code !== 0);
+            if (data.code === 0) {
+                document.getElementById('domainsCount').innerText = parseInt(document.getElementById('domainsCount').innerText) + 1;
+            }
+        }
+
+        async function genQuiz() {
+            const res = await fetch("/api/quiz/generate", { method: "POST" });
+            const data = await res.json();
+            if (data.code === 0) {
+                showToast(data.msg);
+                document.getElementById('quizzesCount').innerText = parseInt(document.getElementById('quizzesCount').innerText) + 1;
+                const resultDiv = document.getElementById("quizResult");
+                resultDiv.style.display = "block";
+                resultDiv.innerText = data.quiz;
+            } else {
+                showToast(data.msg, true);
+            }
+        }
+    </script>
+</body>
+
+</html>

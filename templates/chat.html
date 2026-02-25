@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>学习对话与知识图谱</title>
+    <!-- 引入 vis-network 库，用于绘制知识图谱 -->
+    <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <style>
+        :root {
+            --primary: #007bff;
+            --primary-hover: #0056b3;
+            --bg: #f4f6f9;
+            --text: #333;
+            --border: #dee2e6;
+            --chat-bg: #fff;
+            --ai-msg-bg: #f8f9fa;
+            --user-msg-bg: #007bff;
+            --user-msg-color: #fff;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            display: flex;
+            background-color: var(--bg);
+            color: var(--text);
+            overflow: hidden;
+        }
+
+        /* 顶部导航兰 */
+        .navbar {
+            position: absolute;
+            top: 0;
+            width: 100%;
+            height: 50px;
+            background: #fff;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            box-sizing: border-box;
+            z-index: 100;
+        }
+
+        .back-btn {
+            text-decoration: none;
+            color: var(--primary);
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .title {
+            margin-left: 20px;
+            font-weight: bold;
+            font-size: 16px;
+        }
+
+        /* 主体分栏布局 */
+        .main-container {
+            display: flex;
+            width: 100%;
+            height: calc(100vh - 50px);
+            margin-top: 50px;
+        }
+
+        /* 左侧知识图谱 */
+        .graph-pane {
+            flex: 1;
+            border-right: 1px solid var(--border);
+            background: #fff;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .pane-header {
+            padding: 10px 20px;
+            border-bottom: 1px solid var(--border);
+            background: #f8f9fa;
+            font-weight: bold;
+            font-size: 14px;
+            color: #555;
+        }
+
+        #mynetwork {
+            flex: 1;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* 右侧对话区 */
+        .chat-pane {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: var(--chat-bg);
+            max-width: 600px;
+        }
+
+        .chat-history {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            scroll-behavior: smooth;
+        }
+
+        .message {
+            margin-bottom: 20px;
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+        }
+
+        .message.user {
+            align-items: flex-end;
+        }
+
+        .message.ai {
+            align-items: flex-start;
+        }
+
+        .bubble {
+            max-width: 80%;
+            padding: 12px 16px;
+            border-radius: 12px;
+            font-size: 14px;
+            line-height: 1.5;
+            word-wrap: break-word;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+        }
+
+        .message.user .bubble {
+            background-color: var(--user-msg-bg);
+            color: var(--user-msg-color);
+            border-bottom-right-radius: 2px;
+        }
+
+        .message.ai .bubble {
+            background-color: var(--ai-msg-bg);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-bottom-left-radius: 2px;
+            white-space: pre-wrap;
+            /* 保持换行 */
+        }
+
+        /* 输入区 */
+        .input-area {
+            display: flex;
+            padding: 15px 20px;
+            border-top: 1px solid var(--border);
+            background: #fff;
+            align-items: center;
+        }
+
+        .input-box {
+            flex: 1;
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 12px 20px;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .input-box:focus {
+            border-color: var(--primary);
+        }
+
+        .send-btn {
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            margin-left: 10px;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: background 0.2s;
+        }
+
+        .send-btn:hover {
+            background: var(--primary-hover);
+        }
+
+        .send-btn:disabled {
+            background: var(--disabled);
+            cursor: not-allowed;
+        }
+
+        .send-btn svg {
+            width: 18px;
+            height: 18px;
+            fill: currentColor;
+        }
+
+        /* 加载动画 */
+        .typing-indicator {
+            display: flex;
+            align-items: center;
+            padding: 12px 16px;
+            background-color: var(--ai-msg-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            border-bottom-left-radius: 2px;
+            width: fit-content;
+        }
+
+        .typing-indicator span {
+            height: 6px;
+            width: 6px;
+            background: #888;
+            border-radius: 50%;
+            display: inline-block;
+            margin: 0 2px;
+            animation: bounce 1.4s infinite ease-in-out both;
+        }
+
+        .typing-indicator span:nth-child(1) {
+            animation-delay: -0.32s;
+        }
+
+        .typing-indicator span:nth-child(2) {
+            animation-delay: -0.16s;
+        }
+
+        @keyframes bounce {
+
+            0%,
+            80%,
+            100% {
+                transform: scale(0);
+            }
+
+            40% {
+                transform: scale(1);
+            }
+        }
+
+        /* 隐藏滚动条但保留功能 */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="navbar">
+        <a href="/" class="back-btn">&larr; 返回首页</a>
+        <div class="title">递归学习引擎 - 领域对话</div>
+    </div>
+
+    <div class="main-container">
+        <!-- 左侧：知识图谱 -->
+        <div class="graph-pane">
+            <div class="pane-header">当前学习关系 (Relative Knowledge Graph)</div>
+            <div id="mynetwork"></div>
+        </div>
+
+        <!-- 右侧：AI 对话 -->
+        <div class="chat-pane">
+            <div class="chat-history" id="chatHistory">
+                <div class="message ai">
+                    <div class="bubble">你好！我是你的学习助手。我们可以开始讨论任何专业话题。在对话过程中，我会自动提取专业名词并建立知识图谱。你想学点什么？</div>
+                </div>
+            </div>
+
+            <div class="input-area">
+                <input type="text" id="userInput" class="input-box" placeholder="输入你想学习的内容，例如：解释一下什么是Transformer..."
+                    autocomplete="off">
+                <button id="sendBtn" class="send-btn" onclick="sendMessage()">
+                    <!-- 发送图标 -->
+                    <svg viewBox="0 0 24 24">
+                        <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // 1. 初始化 Vis.js 知识图谱
+        // ==========================================
+        // 存储当前图谱数据的对象
+        const nodes = new vis.DataSet([]);
+        const edges = new vis.DataSet([]);
+
+        const container = document.getElementById('mynetwork');
+        const data = { nodes: nodes, edges: edges };
+
+        const options = {
+            nodes: {
+                shape: 'dot',
+                size: 20,
+                font: { size: 14, color: '#333' },
+                borderWidth: 2,
+                shadow: true
+            },
+            edges: {
+                width: 2,
+                font: { size: 12, align: 'middle' },
+                arrows: { to: { enabled: true, scaleFactor: 0.5 } },
+                color: { color: '#aaa', highlight: '#007bff' },
+                smooth: { type: 'continuous' }
+            },
+            groups: {
+                concept: { color: { background: '#97c2fc', border: '#2b7ce9' } },
+                model: { color: { background: '#fb7e81', border: '#fa0a10' } },
+                architecture: { color: { background: '#ffcc00', border: '#e6b800' } },
+                domain: { color: { background: '#7be141', border: '#41a906' } }
+            },
+            physics: {
+                forceAtlas2Based: { gravitationalConstant: -50, centralGravity: 0.01, springLength: 100, springConstant: 0.08 },
+                maxVelocity: 50,
+                solver: 'forceAtlas2Based',
+                timestep: 0.35,
+                stabilization: { iterations: 150 }
+            }
+        };
+
+        const network = new vis.Network(container, data, options);
+
+        // ==========================================
+        // 2. 对话与接口逻辑
+        // ==========================================
+        const userInput = document.getElementById('userInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const chatHistory = document.getElementById('chatHistory');
+
+        // 回车发送
+        userInput.addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+
+        function appendMessage(role, text) {
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `message ${role}`;
+
+            const bubble = document.createElement('div');
+            bubble.className = 'bubble';
+            bubble.innerText = text;
+
+            msgDiv.appendChild(bubble);
+            chatHistory.appendChild(msgDiv);
+            scrollToBottom();
+        }
+
+        function showTyping() {
+            const msgDiv = document.createElement('div');
+            msgDiv.className = 'message ai typing';
+            msgDiv.id = 'typingIndicator';
+
+            const indicator = document.createElement('div');
+            indicator.className = 'typing-indicator';
+            indicator.innerHTML = '<span></span><span></span><span></span>';
+
+            msgDiv.appendChild(indicator);
+            chatHistory.appendChild(msgDiv);
+            scrollToBottom();
+        }
+
+        function removeTyping() {
+            const el = document.getElementById('typingIndicator');
+            if (el) el.remove();
+        }
+
+        function scrollToBottom() {
+            chatHistory.scrollTop = chatHistory.scrollHeight;
+        }
+
+        // ==========================================
+        // 3. 更新图谱逻辑
+        // ==========================================
+        function updateGraph(newEntities, newRelations) {
+            // 合并节点
+            newEntities.forEach(entity => {
+                if (!nodes.get(entity.id)) {
+                    nodes.add({
+                        id: entity.id,
+                        label: entity.label || entity.id,
+                        group: entity.group || 'concept'
+                    });
+                }
+            });
+
+            // 合并关系
+            newRelations.forEach(rel => {
+                // 检查是否已存在相同的边避免重复绘制
+                const edgeId = `${rel.from}-${rel.to}-${rel.label}`;
+                if (!edges.get(edgeId)) {
+                    edges.add({
+                        id: edgeId,
+                        from: rel.from,
+                        to: rel.to,
+                        label: rel.label
+                    });
+                }
+            });
+
+            // 聚焦到新节点（如果有）
+            if (newEntities.length > 0) {
+                // network.fit({ animation: true });
+            }
+        }
+
+        async function sendMessage() {
+            const text = userInput.value.trim();
+            if (!text) return;
+
+            // 1. 显示用户消息
+            appendMessage('user', text);
+            userInput.value = '';
+
+            // 2. 锁定输入，显示加载
+            userInput.disabled = true;
+            sendBtn.disabled = true;
+            showTyping();
+
+            try {
+                // 3. 请求 API
+                const res = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: text })
+                });
+
+                const data = await res.json();
+
+                removeTyping();
+
+                if (res.ok && data.code === 0) {
+                    // 4. 显示AI回复
+                    appendMessage('ai', data.reply);
+
+                    // 5. 动态更新左侧图谱
+                    if (data.entities || data.relations) {
+                        updateGraph(data.entities || [], data.relations || []);
+                    }
+                } else {
+                    appendMessage('ai', '抱歉，接口返回错误：' + (data.msg || '未知错误'));
+                }
+            } catch (err) {
+                removeTyping();
+                appendMessage('ai', '网络请求失败，请检查服务是否运行正常。');
+                console.error(err);
+            } finally {
+                // 6. 恢复输入
+                userInput.disabled = false;
+                sendBtn.disabled = false;
+                userInput.focus();
+            }
+        }
+    </script>
+</body>
+
+</html>
