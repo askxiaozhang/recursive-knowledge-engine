@@ -265,15 +265,29 @@ def chat_api():
                 messages=[
                     {"role": "system", "content": sys_prompt},
                     {"role": "user", "content": user_msg}
-                ],
-                response_format={"type": "json_object"}
+                ]
             ):
                 response_buffer += chunk
                 # 实时推送每个字符给前端
                 yield f"data: {json.dumps({'type': 'chunk', 'content': chunk})}\n\n"
                 
             # 接收完全部流后，统一解析 JSON
-            llm_data = json.loads(response_buffer)
+            print(f"DEBUG: response_buffer length: {len(response_buffer)}")
+            # 兼容性处理：去除可能存在的 Markdown 代码块标记盒空行
+            clean_token = response_buffer.strip()
+            if clean_token.startswith("```"):
+                # 如果以 ```json 或 ``` 开头，尝试剥离
+                lines = clean_token.splitlines()
+                if lines[0].startswith("```"):
+                    lines = lines[1:]
+                if lines and lines[-1].startswith("```"):
+                    lines = lines[:-1]
+                clean_token = "\n".join(lines).strip()
+            
+            if not clean_token:
+                raise ValueError("模型返回了空内容")
+
+            llm_data = json.loads(clean_token)
             reply = llm_data.get("reply", "我无法理解该问题。")
             entities = llm_data.get("entities", [])
             relations = llm_data.get("relations", [])
@@ -342,4 +356,4 @@ def chat_api():
     return Response(stream_with_context(generate()), mimetype='text/event-stream')
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    app.run(debug=True, port=5002)
