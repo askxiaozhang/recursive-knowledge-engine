@@ -386,13 +386,73 @@
             bottom: 40px;
         }
 
-        ::-webkit-scrollbar {
-            width: 5px;
-        }
-
         ::-webkit-scrollbar-thumb {
             background: rgba(255, 255, 255, 0.1);
             border-radius: 10px;
+        }
+
+        /* 图例与指南样式 */
+        .graph-legend {
+            position: absolute;
+            bottom: 24px;
+            left: 24px;
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 20px;
+            z-index: 10;
+            user-select: none;
+            max-width: 280px;
+        }
+
+        .legend-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-main);
+            margin-bottom: 15px;
+            display: block;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 10px;
+            font-size: 13px;
+        }
+
+        .legend-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .legend-desc {
+            color: var(--text-muted);
+            line-height: 1.4;
+        }
+
+        .legend-divider {
+            height: 1px;
+            background: var(--border);
+            margin: 15px 0;
+        }
+
+        .guide-item {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+            display: flex;
+            gap: 8px;
+        }
+
+        .guide-key {
+            color: var(--primary);
+            font-weight: 600;
         }
     </style>
 </head>
@@ -460,6 +520,16 @@
             <div style="flex: 1;"></div>
 
             <div class="nav-section">
+                <span class="nav-label">图谱视图控制</span>
+                <button class="btn"
+                    style="width: 100%; background: var(--glass-bg); color: #cbd5e1; font-size: 13px; margin-bottom: 8px; border: 1px solid var(--border);"
+                    onclick="resetToFramework()">框架视图 (重置)</button>
+                <button class="btn"
+                    style="width: 100%; background: rgba(244, 63, 94, 0.15); color: #f43f5e; font-size: 13px; margin-bottom: 8px; border: 1px solid rgba(244, 63, 94, 0.3);"
+                    onclick="simulateWeakness()">分析薄弱点闭环</button>
+            </div>
+
+            <div class="nav-section">
                 <button class="btn"
                     style="width: 100%; background: #28a74555; color: #5eff5e; border: 1px solid #28a745; margin-bottom: 10px;"
                     onclick="backupCloud()">同步云端</button>
@@ -474,6 +544,43 @@
             <!-- 知识图谱 (占据背景) -->
             <div class="graph-container">
                 <div id="mynetwork"></div>
+
+                <!-- 图例与交互指南 -->
+                <div class="graph-legend">
+                    <span class="legend-title">图谱图例</span>
+                    <div class="legend-item">
+                        <div class="legend-dot" style="background: #ef4444; border: 2px solid #b91c1c;"></div>
+                        <div class="legend-desc">核心概念<br><small>学习的主题骨架</small></div>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-dot" style="background: #10b981; border: 2px solid #047857;"></div>
+                        <div class="legend-desc">关键维度<br><small>一级分支，可点击展开</small></div>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-dot" style="background: #64748b; border: 2px solid #475569;"></div>
+                        <div class="legend-desc">细节补充<br><small>二级内容，按需探究</small></div>
+                    </div>
+
+                    <div class="legend-divider"></div>
+
+                    <span class="legend-title">交互指南</span>
+                    <div class="guide-item">
+                        <span class="guide-key">左键点击:</span>
+                        <span>选中节点并高亮关联路径</span>
+                    </div>
+                    <div class="guide-item">
+                        <span class="guide-key">双击/点击主干:</span>
+                        <span>展开或折叠该维度的细节</span>
+                    </div>
+                    <div class="guide-item">
+                        <span class="guide-key">滚轮/捏合:</span>
+                        <span>缩放图谱画布</span>
+                    </div>
+                    <div class="guide-item">
+                        <span class="guide-key">点击空白:</span>
+                        <span>重置视图视角</span>
+                    </div>
+                </div>
             </div>
 
             <!-- 对话面板 (悬浮或靠右) -->
@@ -582,17 +689,32 @@
         // 3. 知识图谱引擎 (Vis.js)
         // ==========================================
         {% if user %}
-        const nodes = new vis.DataSet({{ initial_nodes | tojson | safe }});
+        const initNodesWithState = {{ initial_nodes | tojson | safe }}.map(n => ({
+            ...n,
+            hidden: n.group === 'detail' // 默认隐藏细节
+        }));
+        const nodes = new vis.DataSet(initNodesWithState);
         const edges = new vis.DataSet({{ initial_edges | tojson | safe }});
         const chatHistoryData = {{ chat_history | tojson | safe }};
 
         const container = document.getElementById('mynetwork');
         const networkData = { nodes, edges };
+
+        const groupColors = {
+            core: { background: '#ef4444', border: '#b91c1c' }, // 红 - 核心概念
+            primary: { background: '#10b981', border: '#047857' }, // 绿 - 一级主干
+            detail: { background: '#64748b', border: '#475569' } // 灰 - 补充细节
+        };
+
         const networkOptions = {
             nodes: {
-                shape: 'dot', size: 16,
-                font: { size: 12, color: '#f1f5f9' },
-                borderWidth: 2, shadow: true
+                shadow: true,
+                borderWidth: 2
+            },
+            groups: {
+                core: { shape: 'dot', size: 35, color: groupColors.core, font: { size: 18, color: '#ffffff', bold: true } },
+                primary: { shape: 'dot', size: 22, color: groupColors.primary, font: { size: 14, color: '#f1f5f9' } },
+                detail: { shape: 'dot', size: 12, color: groupColors.detail, font: { size: 10, color: '#cbd5e1' } }
             },
             edges: {
                 width: 1, color: { color: 'rgba(255,255,255,0.2)', highlight: '#818cf8' },
@@ -600,33 +722,193 @@
                 smooth: { type: 'continuous' }
             },
             physics: {
-                forceAtlas2Based: { gravitationalConstant: -30, centralGravity: 0.01, springLength: 100 },
+                forceAtlas2Based: { gravitationalConstant: -40, centralGravity: 0.01, springLength: 120 },
                 solver: 'forceAtlas2Based', stabilization: { iterations: 100 }
             }
         };
         const network = new vis.Network(container, networkData, networkOptions);
 
-        network.on("selectNode", function (params) {
+        let focusedNode = null;
+
+        function syncEdgesVisibility() {
+            const updates = [];
+            edges.get().forEach(edge => {
+                const n1 = nodes.get(edge.from);
+                const n2 = nodes.get(edge.to);
+                if (n1 && n2) {
+                    const hideEdge = n1.hidden || n2.hidden;
+                    // 核心边加粗
+                    const isCore = (n1.group === 'core' || n2.group === 'core');
+                    if (edge.hidden !== hideEdge) updates.push({ id: edge.id, hidden: hideEdge, width: isCore ? 3 : 1 });
+                }
+            });
+            if (updates.length > 0) edges.update(updates);
+        }
+
+        syncEdgesVisibility();
+
+        network.on("click", function (params) {
             if (params.nodes.length > 0) {
-                const node = nodes.get(params.nodes[0]);
-                document.getElementById('userInput').value = `解释一下 ${node.label}`;
+                const nodeId = params.nodes[0];
+                const node = nodes.get(nodeId);
+                focusedNode = nodeId;
+
+                // 第一层：点击一级主干，展示子阶段细节 (展开深挖)
+                if (node.group === 'primary') {
+                    const connected = network.getConnectedNodes(nodeId);
+                    const nUpdates = [];
+                    connected.forEach(cid => {
+                        const cNode = nodes.get(cid);
+                        if (cNode && cNode.group === 'detail') {
+                            nUpdates.push({ id: cid, hidden: !cNode.hidden }); // 切换显隐
+                        }
+                    });
+                    if (nUpdates.length > 0) nodes.update(nUpdates);
+                    syncEdgesVisibility();
+                }
+
+                // 关联高亮
+                applyHighlight(nodeId);
+
+                // 便捷操作
+                if (node.group === 'detail') {
+                    document.getElementById('userInput').value = `请详细解释细节参数：${node.label}`;
+                } else if (node.group === 'primary') {
+                    document.getElementById('userInput').value = `请深入分析维度：${node.label}`;
+                } else {
+                    document.getElementById('userInput').value = `什么是核心概念：${node.label}`;
+                }
+            } else {
+                focusedNode = null;
+                resetToFramework();
             }
         });
 
+        function applyHighlight(centerNodeId) {
+            const connectedNodes = network.getConnectedNodes(centerNodeId);
+            connectedNodes.push(centerNodeId);
+
+            const nUpdates = [];
+            nodes.get().forEach(n => {
+                if (n.hidden) return;
+                const grp = n.group || 'detail';
+                if (connectedNodes.includes(n.id)) {
+                    nUpdates.push({ id: n.id, color: undefined, font: { color: grp === 'detail' ? '#cbd5e1' : '#ffffff' } }); // 原色
+                } else {
+                    nUpdates.push({ id: n.id, color: { background: 'rgba(50,50,50,0.4)', border: 'rgba(50,50,50,0.6)' }, font: { color: 'rgba(255,255,255,0.2)' } }); // 自动淡化
+                }
+            });
+            nodes.update(nUpdates);
+
+            const eUpdates = [];
+            edges.get().forEach(e => {
+                if (e.hidden) return;
+                const isConn = e.from === centerNodeId || e.to === centerNodeId;
+                eUpdates.push({ id: e.id, color: { opacity: isConn ? 1.0 : 0.05 } });
+            });
+            edges.update(eUpdates);
+        }
+
         function highlightNode(nodeId) {
-            if (nodes.get(nodeId)) {
+            const node = nodes.get(nodeId);
+            if (node) {
+                // 如果节点被隐藏了（例如是 detail 节点），先将其显示出来
+                if (node.hidden) {
+                    nodes.update({ id: nodeId, hidden: false });
+                    syncEdgesVisibility();
+                }
                 network.selectNodes([nodeId]);
+                const params = { nodes: [nodeId] };
+                network.emit('click', params); // 触发关联高亮逻辑
                 network.focus(nodeId, { scale: 1.2, animation: { duration: 1000 } });
             }
         }
 
+        function resetToFramework() {
+            const nUpdates = [];
+            nodes.get().forEach(n => {
+                nUpdates.push({ id: n.id, hidden: n.group === 'detail', color: undefined, font: { color: (n.group || 'detail') === 'detail' ? '#cbd5e1' : '#ffffff' } });
+            });
+            nodes.update(nUpdates);
+
+            const eUpdates = [];
+            edges.get().forEach(e => {
+                const n1 = nodes.get(e.from); const n2 = nodes.get(e.to);
+                const isCore = (n1 && n1.group === 'core') || (n2 && n2.group === 'core');
+                eUpdates.push({ id: e.id, color: { color: 'rgba(255,255,255,0.2)', opacity: 1.0 }, width: isCore ? 3 : 1 });
+            });
+            edges.update(eUpdates);
+
+            syncEdgesVisibility();
+            focusedNode = null;
+            network.unselectAll();
+            network.fit({ animation: true });
+        }
+
+        function simulateWeakness() {
+            const details = nodes.get({ filter: n => n.group === 'detail' });
+            if (details.length === 0) {
+                showToast("暂未发掘到足够的细节节点，请先触发第一层主干并产生关联子节点进行学习。");
+                return;
+            }
+            // 随机选取1个错题节点
+            const badNode = details[Math.floor(Math.random() * details.length)];
+
+            // 隐藏全部
+            const allNodesUpdates = nodes.get().map(n => ({ id: n.id, hidden: true, color: undefined }));
+            nodes.update(allNodesUpdates);
+
+            // 溯源路径：模拟依赖关系向上找 primary -> core
+            let pathIds = [badNode.id];
+            edges.get().forEach(e => {
+                if (e.to === badNode.id || e.from === badNode.id) {
+                    const parentId = e.from === badNode.id ? e.to : e.from;
+                    const pNode = nodes.get(parentId);
+                    if (pNode && pNode.group === 'primary') {
+                        pathIds.push(parentId);
+                        edges.get().forEach(ce => {
+                            if (ce.to === parentId || ce.from === parentId) {
+                                const coreId = ce.from === parentId ? ce.to : ce.from;
+                                const cNode = nodes.get(coreId);
+                                if (cNode && cNode.group === 'core') pathIds.push(coreId);
+                            }
+                        });
+                    }
+                }
+            });
+
+            // 展现最短路径
+            const showUpdates = pathIds.map(id => {
+                if (id === badNode.id) return { id, hidden: false, color: { background: '#f43f5e', border: '#be123c' } }; // 红高亮
+                return { id, hidden: false, color: undefined };
+            });
+            nodes.update(showUpdates);
+            syncEdgesVisibility();
+
+            // 连线标红
+            edges.get().forEach(e => {
+                if (!e.hidden) edges.update([{ id: e.id, color: { color: '#f43f5e', opacity: 1.0 }, width: 2 }]);
+            });
+
+            network.fit({ animation: true });
+            showToast(`[错题诊断闭环] 为您高亮薄弱点 "${badNode.label}" 及其底层依赖链路。`);
+        }
+
         function updateGraph(newEntities, newRelations) {
-            newEntities.forEach(ent => { if (!nodes.get(ent.id)) nodes.add({ id: ent.id, label: ent.label, group: ent.group }); });
+            newEntities.forEach(ent => {
+                if (!nodes.get(ent.id)) nodes.add({ id: ent.id, label: ent.label, group: ent.group, hidden: ent.group === 'detail' });
+            });
             newRelations.forEach(rel => {
                 const id = `${rel.from}-${rel.to}-${rel.label}`;
-                if (!edges.get(id)) edges.add({ id, from: rel.from, to: rel.to, label: rel.label });
+                if (!edges.get(id)) {
+                    edges.add({ id, from: rel.from, to: rel.to, label: rel.label, hidden: true });
+                }
             });
+            syncEdgesVisibility();
             document.getElementById('termsCount').innerText = nodes.length;
+            if (!focusedNode) {
+                network.fit({ animation: true });
+            }
         }
 
         // ==========================================
