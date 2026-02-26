@@ -343,6 +343,30 @@
 
         const network = new vis.Network(container, data, options);
 
+        // 绑定节点点击事件：点击时清空上下文，并触发新的一轮“什么是 xxx？”
+        network.on("selectNode", async function (params) {
+            if (params.nodes.length > 0) {
+                const nodeId = params.nodes[0];
+                const node = nodes.get(nodeId);
+                const nodeLabel = node.label || nodeId;
+
+                // 1. 清空前端界面的对话上下文
+                chatHistory.innerHTML = '';
+                appendMessage('ai', `正在重新聚焦学习知识点：[${nodeLabel}]，历史上下文已为您清空。`);
+
+                // 2. 调用后端接口清空当前聊天记录（不影响知识图谱本体）
+                try {
+                    await fetch('/api/chat/clear', { method: 'POST' });
+                } catch (e) {
+                    console.error("清空历史记录失败:", e);
+                }
+
+                // 3. 自动填入并发送新的问题
+                userInput.value = `什么是${nodeLabel}？`;
+                sendMessage();
+            }
+        });
+
         // ==========================================
         // 2. 对话与接口逻辑
         // ==========================================

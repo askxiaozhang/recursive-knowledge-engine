@@ -212,6 +212,20 @@ def gen_quiz():
 
     return jsonify({"code": 0, "quiz": "1. 解释图谱的作用？\n2. SQLite与MySQL对比？", "msg": "出题成功！"})
 
+@app.route("/api/chat/clear", methods=["POST"])
+def clear_chat():
+    user = get_current_user()
+    if not user:
+        return jsonify({"code": 1, "msg": "请先登录"}), 401
+
+    conn = get_local_db()
+    c = conn.cursor()
+    c.execute('DELETE FROM chat_history')
+    conn.commit()
+    conn.close()
+    
+    return jsonify({"code": 0, "msg": "已清空学习上下文"})
+
 @app.route("/api/chat", methods=["POST"])
 def chat_api():
     user = get_current_user()
@@ -232,10 +246,24 @@ def chat_api():
     def generate():
         response_buffer = ""
         try:
+            conn_temp = get_local_db()
+            c_temp = conn_temp.cursor()
+            existing_terms = [{"id": row["id"], "label": row["label"]} for row in c_temp.execute('SELECT id, label FROM terms').fetchall()]
+            conn_temp.close()
+            
+            # 缩减长列表以避免超出上下文限制，如果非常多的话，可以考虑只取最近的一些，但在此处先全量转JSON
+            existing_terms_str = json.dumps(existing_terms, ensure_ascii=False)
+            
+            sys_prompt = f"""你是一个智能知识图谱小助手。请回答用户的问题，并从你的回答中提取核心实体和他们之间的关系。请必须以合法的JSON格式返回，不要包含其他文本（不要使用```json），且JSON的结构必须严谨，如下：
+{{"reply": "你的回答内容", "entities": [{{"id": "唯一标识", "label": "显示名", "group": "分类(如concept, domain, model等)"}}], "relations": [{{"from": "实体A的id", "to": "实体B的id", "label": "关系名"}}]}}
+
+为了保持专业术语和关系的一致性，请尽量复用以下现有的实体ID（若图中已存在相关概念，使用已有ID）：
+{existing_terms_str}"""
+
             # 调用大模型流式接口
             for chunk in bot.chat_stream(
                 messages=[
-                    {"role": "system", "content": "你是一个智能知识图谱小助手。请回答用户的问题，并从你的回答中提取核心实体和他们之间的关系。请必须以合法的JSON格式返回，不要包含其他文本（不要使用```json），且JSON的结构必须严谨，如下：\n{\"reply\": \"你的回答内容\", \"entities\": [{\"id\": \"唯一标识\", \"label\": \"显示名\", \"group\": \"分类(如concept, domain, model等)\"}], \"relations\": [{\"from\": \"实体A的id\", \"to\": \"实体B的id\", \"label\": \"关系名\"}]}"},
+                    {"role": "system", "content": sys_prompt},
                     {"role": "user", "content": user_msg}
                 ],
                 response_format={"type": "json_object"}
