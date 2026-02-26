@@ -1,63 +1,20 @@
-from flask import Flask, request, jsonify, render_template, session
+from flask import Flask, request, jsonify, render_template, session, Response, stream_with_context
 import os
 import sqlite3
 import requests
 import json
 import datetime
+from dotenv import load_dotenv
+from bot import Bot
+from database import get_local_db
+load_dotenv()
+
+bot = Bot()
 
 app = Flask(__name__)
 app.secret_key = "local_client_secret_key"  # 用于session
 
 CLOUD_SERVER_URL = "http://127.0.0.1:5001"
-LOCAL_DB_PATH = "local.db"
-
-# ==========================================
-# 1. 本地数据库初始化
-# ==========================================
-def get_local_db():
-    conn = sqlite3.connect(LOCAL_DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
-
-def init_local_db():
-    conn = get_local_db()
-    c = conn.cursor()
-    # 领域表
-    c.execute('''CREATE TABLE IF NOT EXISTS domains (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT,
-        created_at TEXT
-    )''')
-    # 知识点表 (术语)
-    c.execute('''CREATE TABLE IF NOT EXISTS terms (
-        id TEXT PRIMARY KEY,
-        label TEXT,
-        group_type TEXT
-    )''')
-    # 关系表
-    c.execute('''CREATE TABLE IF NOT EXISTS relations (
-        id TEXT PRIMARY KEY,
-        source TEXT,
-        target TEXT,
-        label TEXT
-    )''')
-    # 历史记录
-    c.execute('''CREATE TABLE IF NOT EXISTS chat_history (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        role TEXT,
-        content TEXT,
-        created_at TEXT
-    )''')
-    # 出题记录
-    c.execute('''CREATE TABLE IF NOT EXISTS quizzes_log (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        created_at TEXT
-    )''')
-    conn.commit()
-    conn.close()
-
-init_local_db()
-
 # ==========================================
 # 2. 会话权限辅助函数
 # ==========================================
@@ -101,7 +58,33 @@ def chat_page():
          # 只要登录了允许进入体验，由内层接口控制
          pass
          
-    return render_template("chat.html", user=user)
+    conn = get_local_db()
+    c = conn.cursor()
+    terms_db = c.execute('SELECT * FROM terms').fetchall()
+    relations_db = c.execute('SELECT * FROM relations').fetchall()
+    
+    # 获取历史聊天记录
+    chat_history_db = c.execute('SELECT role, content FROM chat_history ORDER BY id ASC').fetchall()
+    conn.close()
+
+    initial_nodes = []
+    for t in terms_db:
+        initial_nodes.append({"id": t["id"], "label": t["label"], "group": t["group_type"]})
+
+    initial_edges = []
+    for r in relations_db:
+        initial_edges.append({
+            "id": r["id"],
+            "from": r["source"],
+            "to": r["target"],
+            "label": r["label"]
+        })
+        
+    chat_history = []
+    for msg in chat_history_db:
+        chat_history.append({"role": msg["role"], "content": msg["content"]})
+
+    return render_template("chat.html", user=user, initial_nodes=initial_nodes, initial_edges=initial_edges, chat_history=chat_history)
 
 # ==========================================
 # 4. 代理云端鉴权接口
@@ -243,64 +226,92 @@ def chat_api():
     c = conn.cursor()
     now_str = datetime.datetime.now().isoformat()
     c.execute('INSERT INTO chat_history (role, content, created_at) VALUES (?, ?, ?)', ('user', user_msg, now_str))
-    
-    # 模拟AI生成逻辑
-    if "Transformer" in user_msg or "transformer" in user_msg.lower():
-        reply = "Transformer是一个基于自注意力机制的序列模型，被广泛应用于NLP领域。"
-        entities = [
-            {"id": "Transformer", "label": "Transformer", "group": "model"},
-            {"id": "Self-Attention", "label": "自注意力机制", "group": "concept"}
-        ]
-        relations = [
-            {"from": "Transformer", "to": "Self-Attention", "label": "基于起"}
-        ]
-    else:
-        reply = f"我已经收到了你的问题：'{user_msg}'。我会分析其中的专业术语并在左侧构建知识图谱。"
-        entities = [
-            {"id": "UserQuery", "label": "用户问题", "group": "concept"},
-            {"id": "KnowledgeGraph", "label": "知识图谱", "group": "domain"}
-        ]
-        relations = [
-            {"from": "UserQuery", "to": "KnowledgeGraph", "label": "更新"}
-        ]
-
-    # 保存 AI 消息
-    c.execute('INSERT INTO chat_history (role, content, created_at) VALUES (?, ?, ?)', ('ai', reply, datetime.datetime.now().isoformat()))
-    
-    # 解析并保存实体和关系到本地 local.db（检查上限）
-    plan = user['plan']
-    # 简单计算当前知识点数量
-    current_terms_count = c.execute('SELECT COUNT(*) FROM terms').fetchone()[0]
-    
-    saved_entities = 0
-    for ent in entities:
-        if plan['max_terms'] != -1 and current_terms_count + saved_entities >= plan['max_terms']:
-            reply += "\n\n[系统提示] 知识点存储已达上限，停止记录新节点。请升级版本。"
-            break
-        
-        # 插入或忽略
-        try:
-            c.execute('INSERT OR IGNORE INTO terms (id, label, group_type) VALUES (?, ?, ?)', (ent['id'], ent['label'], ent['group']))
-            saved_entities += 1
-        except Exception:
-            pass
-            
-    for rel in relations:
-        rel_id = f"{rel['from']}-{rel['to']}-{rel['label']}"
-        try:
-            c.execute('INSERT OR IGNORE INTO relations (id, source, target, label) VALUES (?, ?, ?, ?)', (rel_id, rel['from'], rel['to'], rel['label']))
-        except Exception:
-            pass
-
     conn.commit()
     conn.close()
+    
+    def generate():
+        response_buffer = ""
+        try:
+            # 调用大模型流式接口
+            for chunk in bot.chat_stream(
+                messages=[
+                    {"role": "system", "content": "你是一个智能知识图谱小助手。请回答用户的问题，并从你的回答中提取核心实体和他们之间的关系。请必须以合法的JSON格式返回，不要包含其他文本（不要使用```json），且JSON的结构必须严谨，如下：\n{\"reply\": \"你的回答内容\", \"entities\": [{\"id\": \"唯一标识\", \"label\": \"显示名\", \"group\": \"分类(如concept, domain, model等)\"}], \"relations\": [{\"from\": \"实体A的id\", \"to\": \"实体B的id\", \"label\": \"关系名\"}]}"},
+                    {"role": "user", "content": user_msg}
+                ],
+                response_format={"type": "json_object"}
+            ):
+                response_buffer += chunk
+                # 实时推送每个字符给前端
+                yield f"data: {json.dumps({'type': 'chunk', 'content': chunk})}\n\n"
+                
+            # 接收完全部流后，统一解析 JSON
+            llm_data = json.loads(response_buffer)
+            reply = llm_data.get("reply", "我无法理解该问题。")
+            entities = llm_data.get("entities", [])
+            relations = llm_data.get("relations", [])
+            
+            # 确保 id 是 string
+            for ent in entities:
+                if "id" in ent:
+                    ent["id"] = str(ent["id"])
+            for rel in relations:
+                if "from" in rel:
+                    rel["from"] = str(rel["from"])
+                if "to" in rel:
+                    rel["to"] = str(rel["to"])
+        except Exception as e:
+            reply = f"大模型请求或解析失败: {str(e)}"
+            entities = []
+            relations = []
+            yield f"data: {json.dumps({'type': 'error', 'content': str(e)})}\n\n"
 
-    return jsonify({
-        "code": 0,
-        "reply": reply,
-        "entities": entities,
-        "relations": relations
-    })
+        # 保存 AI 消息与图谱节点（必须新开 DB 连接，避免多线程游标问题）
+        try:
+            conn2 = get_local_db()
+            c2 = conn2.cursor()
+            c2.execute('INSERT INTO chat_history (role, content, created_at) VALUES (?, ?, ?)', ('ai', reply, datetime.datetime.now().isoformat()))
+            
+            plan = user['plan']
+            current_terms_count = c2.execute('SELECT COUNT(*) FROM terms').fetchone()[0]
+            
+            saved_entities = 0
+            limit_hit = False
+            for ent in entities:
+                if plan['max_terms'] != -1 and current_terms_count + saved_entities >= plan['max_terms']:
+                    limit_hit = True
+                    break
+                try:
+                    c2.execute('INSERT OR IGNORE INTO terms (id, label, group_type) VALUES (?, ?, ?)', (ent['id'], ent['label'], ent['group']))
+                    saved_entities += 1
+                except Exception:
+                    pass
+                    
+            for rel in relations:
+                rel_id = f"{rel['from']}-{rel['to']}-{rel['label']}"
+                try:
+                    c2.execute('INSERT OR IGNORE INTO relations (id, source, target, label) VALUES (?, ?, ?, ?)', (rel_id, rel['from'], rel['to'], rel['label']))
+                except Exception:
+                    pass
+
+            conn2.commit()
+            conn2.close()
+
+            if limit_hit:
+                reply += "\n\n[系统提示] 知识点存储已达上限，停止记录新节点。请升级版本。"
+
+        except Exception as e:
+            print(f"入库报错: {e}")
+
+        # 最后返回整理好的 entities 和 relations 供前端去渲染
+        final_data = {
+            "type": "done",
+            "reply_final": reply,
+            "entities": entities,
+            "relations": relations
+        }
+        yield f"data: {json.dumps(final_data)}\n\n"
+
+    return Response(stream_with_context(generate()), mimetype='text/event-stream')
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)

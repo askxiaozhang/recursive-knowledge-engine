@@ -264,6 +264,10 @@
     <div class="navbar">
         <a href="/" class="back-btn">&larr; 返回首页</a>
         <div class="title">递归学习引擎 - 领域对话</div>
+        <div style="flex: 1;"></div>
+        <button class="backup-btn" onclick="uploadBackup()"
+            style="margin-right: 20px; background-color: #28a745; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 14px;">上传云端备份
+            (clouddb)</button>
     </div>
 
     <div class="main-container">
@@ -276,9 +280,7 @@
         <!-- 右侧：AI 对话 -->
         <div class="chat-pane">
             <div class="chat-history" id="chatHistory">
-                <div class="message ai">
-                    <div class="bubble">你好！我是你的学习助手。我们可以开始讨论任何专业话题。在对话过程中，我会自动提取专业名词并建立知识图谱。你想学点什么？</div>
-                </div>
+                <!-- Data will be loaded by JS -->
             </div>
 
             <div class="input-area">
@@ -298,9 +300,13 @@
         // ==========================================
         // 1. 初始化 Vis.js 知识图谱
         // ==========================================
+        const initialNodes = {{ initial_nodes | tojson | safe }};
+        const initialEdges = {{ initial_edges | tojson | safe }};
+        const chatHistoryData = {{ chat_history | tojson | safe }};
+
         // 存储当前图谱数据的对象
-        const nodes = new vis.DataSet([]);
-        const edges = new vis.DataSet([]);
+        const nodes = new vis.DataSet(initialNodes);
+        const edges = new vis.DataSet(initialEdges);
 
         const container = document.getElementById('mynetwork');
         const data = { nodes: nodes, edges: edges };
@@ -364,6 +370,16 @@
             scrollToBottom();
         }
 
+        // 渲染历史数据
+        if (chatHistoryData && chatHistoryData.length > 0) {
+            chatHistoryData.forEach(msg => {
+                appendMessage(msg.role, msg.content);
+            });
+        } else {
+            // 默认语
+            appendMessage('ai', '你好！我是你的学习助手。我们可以开始讨论任何专业话题。在对话过程中，我会自动提取专业名词并建立知识图谱。你想学点什么？');
+        }
+
         function showTyping() {
             const msgDiv = document.createElement('div');
             msgDiv.className = 'message ai typing';
@@ -422,6 +438,20 @@
             }
         }
 
+        function appendMessageStream(role) {
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `message ${role}`;
+
+            const bubble = document.createElement('div');
+            bubble.className = 'bubble';
+            bubble.innerText = '';
+
+            msgDiv.appendChild(bubble);
+            chatHistory.appendChild(msgDiv);
+            scrollToBottom();
+            return bubble;
+        }
+
         async function sendMessage() {
             const text = userInput.value.trim();
             if (!text) return;
@@ -433,33 +463,79 @@
             // 2. 锁定输入，显示加载
             userInput.disabled = true;
             sendBtn.disabled = true;
-            showTyping();
 
             try {
-                // 3. 请求 API
+                // 3. 请求 API (流式)
                 const res = await fetch('/api/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ message: text })
                 });
 
-                const data = await res.json();
+                if (!res.ok) {
+                    let errData = {};
+                    try { errData = await res.json(); } catch (e) { }
+                    appendMessage('ai', '抱歉，接口返回错误：' + (errData.msg || '未知错误'));
+                    return;
+                }
 
-                removeTyping();
+                const reader = res.body.getReader();
+                const decoder = new TextDecoder('utf-8');
+                let buffer = "";
+                let eventBuffer = "";
+                let aiBubble = appendMessageStream('ai');
 
-                if (res.ok && data.code === 0) {
-                    // 4. 显示AI回复
-                    appendMessage('ai', data.reply);
+                // 4. 处理流式事件
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
 
-                    // 5. 动态更新左侧图谱
-                    if (data.entities || data.relations) {
-                        updateGraph(data.entities || [], data.relations || []);
+                    const chunkStr = decoder.decode(value, { stream: true });
+                    eventBuffer += chunkStr;
+
+                    let eolIndex;
+                    while ((eolIndex = eventBuffer.indexOf('\n\n')) >= 0) {
+                        const ev = eventBuffer.substring(0, eolIndex);
+                        eventBuffer = eventBuffer.substring(eolIndex + 2);
+
+                        if (ev.startsWith('data: ')) {
+                            const dataStr = ev.substring(6);
+                            if (dataStr.trim() === '') continue;
+                            try {
+                                const payload = JSON.parse(dataStr);
+                                if (payload.type === 'chunk') {
+                                    buffer += payload.content;
+                                    // 使用正则容错匹配JSON中 "reply" 字段的内容
+                                    const match = buffer.match(/"reply"\s*:\s*"((?:[^"\\]|\\.)*)/);
+                                    if (match) {
+                                        aiBubble.innerText = match[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
+                                        scrollToBottom();
+                                    } else {
+                                        // 全量匹配作为 fallback
+                                        const fullMatch = buffer.match(/"reply"\s*:\s*"([\s\S]*?)(?:"\s*,|"\s*\})/);
+                                        if (fullMatch) {
+                                            aiBubble.innerText = fullMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
+                                            scrollToBottom();
+                                        }
+                                    }
+                                } else if (payload.type === 'done') {
+                                    if (payload.reply_final) {
+                                        aiBubble.innerText = payload.reply_final;
+                                    }
+                                    if (payload.entities || payload.relations) {
+                                        updateGraph(payload.entities || [], payload.relations || []);
+                                    }
+                                    scrollToBottom();
+                                } else if (payload.type === 'error') {
+                                    appendMessage('ai', '出现异常：' + payload.content);
+                                }
+                            } catch (e) {
+                                console.error('解析 SSE 数据错误:', e, dataStr);
+                            }
+                        }
                     }
-                } else {
-                    appendMessage('ai', '抱歉，接口返回错误：' + (data.msg || '未知错误'));
                 }
             } catch (err) {
-                removeTyping();
                 appendMessage('ai', '网络请求失败，请检查服务是否运行正常。');
                 console.error(err);
             } finally {
@@ -467,6 +543,26 @@
                 userInput.disabled = false;
                 sendBtn.disabled = false;
                 userInput.focus();
+            }
+        }
+
+        async function uploadBackup() {
+            try {
+                const res = await fetch('/api/backup/upload', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+
+                const data = await res.json();
+                if (res.ok && data.code === 0) {
+                    alert('上传到 clouddb 成功！时间: ' + data.backup_date);
+                } else {
+                    alert('备份失败：' + (data.msg || '未知错误'));
+                }
+            } catch (err) {
+                alert('网络连接错误，请检查云端服务（clouddb）是否运行。');
+                console.error(err);
             }
         }
     </script>
