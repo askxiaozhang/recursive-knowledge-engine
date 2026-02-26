@@ -4,290 +4,534 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>知识递归学习引擎 (本地端)</title>
+    <title>递归学习引擎 | Recursive Knowledge Engine</title>
+    <!-- 引入 vis-network 库 -->
+    <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <!-- 引入 Google Fonts -->
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&family=Inter:wght@300;400;600&display=swap"
+        rel="stylesheet">
     <style>
         :root {
-            --primary: #007bff;
-            --primary-hover: #0056b3;
-            --disabled: #ccc;
-            --warning: #ffc107;
-            --danger: #dc3545;
-            --success: #28a745;
-            --bg: #f4f6f9;
-            --text: #333;
-            --card-bg: #fff;
+            --primary: #6366f1;
+            --primary-glow: rgba(99, 102, 241, 0.5);
+            --bg-dark: #0f172a;
+            --sidebar-bg: rgba(30, 41, 59, 0.7);
+            --card-bg: rgba(30, 41, 59, 0.5);
+            --text-main: #f1f5f9;
+            --text-muted: #94a3b8;
+            --border: rgba(255, 255, 255, 0.1);
+            --glass-bg: rgba(255, 255, 255, 0.03);
+            --ai-bubble: rgba(51, 65, 85, 0.8);
+            --user-bubble: #6366f1;
+        }
+
+        * {
+            box-sizing: border-box;
+            transition: all 0.2s ease;
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: var(--bg);
-            color: var(--text);
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text-main);
             margin: 0;
-            padding: 20px;
+            padding: 0;
+            height: 100vh;
             display: flex;
-            justify-content: center;
+            overflow: hidden;
         }
 
-        .container {
-            max-width: 800px;
+        h1,
+        h2,
+        h3 {
+            font-family: 'Outfit', sans-serif;
+            margin: 0;
+        }
+
+        /* ==========================================
+           1. 登录前界面 (Hero Section)
+           ========================================== */
+        .hero-container {
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%);
+            text-align: center;
+            padding: 20px;
+        }
+
+        .hero-card {
+            background: var(--sidebar-bg);
+            backdrop-filter: blur(20px);
+            padding: 40px;
+            border-radius: 24px;
+            border: 1px solid var(--border);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            max-width: 450px;
             width: 100%;
         }
 
-        .header {
-            text-align: center;
-            margin-bottom: 20px;
-            background: var(--card-bg);
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        .hero-title {
+            font-size: 2.5rem;
+            font-weight: 600;
+            margin-bottom: 10px;
+            background: linear-gradient(to right, #818cf8, #c084fc);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
         }
 
-        .card {
-            background: var(--card-bg);
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 20px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        .hero-subtitle {
+            color: var(--text-muted);
+            margin-bottom: 30px;
+        }
+
+        .auth-input {
+            width: 100%;
+            padding: 14px 20px;
+            margin-bottom: 15px;
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            color: white;
+            font-size: 16px;
+            outline: none;
+        }
+
+        .auth-input:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 2px var(--primary-glow);
         }
 
         .btn {
-            padding: 10px 20px;
+            padding: 12px 24px;
+            border-radius: 12px;
             border: none;
-            border-radius: 6px;
             cursor: pointer;
-            background-color: var(--primary);
+            font-weight: 600;
+            font-size: 15px;
+        }
+
+        .btn-primary {
+            background: var(--primary);
             color: white;
-            font-size: 14px;
-            transition: background 0.3s;
+            width: 100%;
+            margin-top: 10px;
         }
 
-        .btn:hover:not(.disabled) {
-            background-color: var(--primary-hover);
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px var(--primary-glow);
         }
 
-        .btn-success {
-            background-color: var(--success);
+        /* ==========================================
+           2. 登录后布局
+           ========================================== */
+        .app-container {
+            display: flex;
+            width: 100%;
+            height: 100vh;
         }
 
-        .btn-success:hover {
-            background-color: #218838;
+        /* 侧边栏 */
+        .sidebar {
+            width: 320px;
+            background: var(--sidebar-bg);
+            backdrop-filter: blur(15px);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            padding: 24px;
+            z-index: 100;
         }
 
-        .btn-warning {
-            background-color: var(--warning);
-            color: #212529;
+        .sidebar-header {
+            margin-bottom: 30px;
         }
 
-        .btn-warning:hover {
-            background-color: #e0a800;
-        }
-
-        .btn-danger {
-            background-color: var(--danger);
-        }
-
-        .btn-danger:hover {
-            background-color: #c82333;
-        }
-
-        .disabled {
-            background: var(--disabled) !important;
-            cursor: not-allowed;
-            color: #666 !important;
-        }
-
-        .tip {
-            color: var(--danger);
-            font-size: 13px;
-            margin-top: 8px;
-        }
-
-        input[type="text"],
-        input[type="password"] {
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 6px;
-            width: 200px;
-            margin-right: 10px;
+        .user-profile {
+            display: flex;
+            align-items: center;
+            gap: 12px;
             margin-bottom: 10px;
         }
 
-        .status-badge {
-            display: inline-block;
-            padding: 4px 8px;
-            border-radius: 12px;
-            background: #e9ecef;
-            font-size: 12px;
+        .avatar {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(45deg, var(--primary), #a855f7);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
             font-weight: bold;
-            margin-left: 10px;
         }
 
-        .status-badge.free {
-            background: #6c757d;
-            color: white;
+        .plan-badge {
+            font-size: 10px;
+            padding: 2px 8px;
+            border-radius: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
 
-        .status-badge.basic {
-            background: #17a2b8;
-            color: white;
+        .stat-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 30px;
         }
 
-        .status-badge.pro {
-            background: #28a745;
-            color: white;
-        }
-
-        /* Toast */
-        #toast {
-            visibility: hidden;
-            min-width: 250px;
-            background-color: #333;
-            color: #fff;
+        .stat-card {
+            background: var(--glass-bg);
+            padding: 12px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
             text-align: center;
+        }
+
+        .stat-value {
+            font-size: 1.2rem;
+            font-weight: 600;
+            display: block;
+        }
+
+        .stat-label {
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        .nav-section {
+            margin-bottom: 30px;
+        }
+
+        .nav-label {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            margin-bottom: 12px;
+            display: block;
+        }
+
+        .tool-card {
+            background: var(--glass-bg);
+            border-radius: 12px;
+            padding: 15px;
+            border: 1px solid var(--border);
+            margin-bottom: 10px;
+        }
+
+        .tool-card input {
+            width: 100%;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px 12px;
+            color: white;
+            font-size: 13px;
+            margin-bottom: 8px;
+        }
+
+        /* 主区域 */
+        .main-content {
+            flex: 1;
+            display: flex;
+            position: relative;
+        }
+
+        /* 知识图谱 */
+        .graph-container {
+            flex: 1;
+            position: relative;
+            background: radial-gradient(circle at center, #1a1f35 0%, #0f172a 100%);
+        }
+
+        #mynetwork {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* 对话面板 */
+        .chat-panel {
+            width: 450px;
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(25px);
+            border-left: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            box-shadow: -10px 0 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .chat-header {
+            padding: 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .chat-history {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            scroll-behavior: smooth;
+        }
+
+        .message {
+            margin-bottom: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .message.user {
+            align-items: flex-end;
+        }
+
+        .message.ai {
+            align-items: flex-start;
+        }
+
+        .bubble {
+            max-width: 90%;
+            padding: 12px 18px;
+            border-radius: 18px;
+            font-size: 14px;
+            line-height: 1.6;
+            word-wrap: break-word;
+        }
+
+        .message.user .bubble {
+            background: var(--user-bubble);
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+
+        .message.ai .bubble {
+            background: var(--ai-bubble);
+            border: 1px solid var(--border);
+            border-bottom-left-radius: 4px;
+            white-space: pre-wrap;
+        }
+
+        .input-area {
+            padding: 20px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            gap: 10px;
+        }
+
+        .chat-input {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 12px 16px;
+            color: white;
+            outline: none;
+        }
+
+        .chat-input:focus {
+            border-color: var(--primary);
+        }
+
+        .send-btn {
+            background: var(--primary);
+            border: none;
+            border-radius: 12px;
+            width: 45px;
+            height: 45px;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+        }
+
+        /* 专业名词高亮 */
+        .term-highlight {
+            font-weight: 600;
+            text-decoration: underline;
+            color: #818cf8;
+            cursor: pointer;
+            padding: 0 2px;
             border-radius: 4px;
-            padding: 16px;
+        }
+
+        .term-highlight:hover {
+            background: rgba(129, 140, 248, 0.2);
+        }
+
+        /* Toast & Animations */
+        #toast {
             position: fixed;
-            z-index: 1000;
+            bottom: 20px;
             left: 50%;
-            bottom: 30px;
             transform: translateX(-50%);
+            padding: 12px 24px;
+            border-radius: 10px;
+            background: #333;
+            color: white;
+            z-index: 1000;
+            opacity: 0;
+            pointer-events: none;
         }
 
         #toast.show {
-            visibility: visible;
-            -webkit-animation: fadein 0.5s, fadeout 0.5s 2.5s;
-            animation: fadein 0.5s, fadeout 0.5s 2.5s;
+            opacity: 1;
+            bottom: 40px;
         }
 
-        @keyframes fadein {
-            from {
-                bottom: 0;
-                opacity: 0;
-            }
-
-            to {
-                bottom: 30px;
-                opacity: 1;
-            }
+        ::-webkit-scrollbar {
+            width: 5px;
         }
 
-        .hidden {
-            display: None !important;
-        }
-
-        .auth-box {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
         }
     </style>
 </head>
 
 <body>
-    <div class="container">
-        <!-- 未登录视图 -->
-        {% if not user %}
-        <div class="header" id="loginView">
-            <h1>知识递归学习引擎</h1>
-            <p>云端鉴权 + 本地执行</p>
-            <div class="auth-box">
-                <input type="text" id="username" placeholder="请输入用户名">
-                <input type="password" id="password" placeholder="请输入密码">
-                <div style="margin-top: 10px;">
-                    <button class="btn" onclick="login()">登录</button>
-                    <button class="btn btn-warning" onclick="register()">注册</button>
-                </div>
-            </div>
+    {% if not user %}
+    <!-- 登录前视图 -->
+    <div class="hero-container">
+        <div class="hero-card">
+            <h1 class="hero-title">Knowledge Engine</h1>
+            <p class="hero-subtitle">递归式 AI 学习助手 & 实时知识图谱</p>
+            <input type="text" id="username" class="auth-input" placeholder="用户名">
+            <input type="password" id="password" class="auth-input" placeholder="密码">
+            <button class="btn btn-primary" onclick="login()">开启探索</button>
+            <p style="font-size: 13px; color: var(--text-muted); margin-top: 20px;">
+                没有账号？<a href="#" onclick="register()" style="color: var(--primary);">立即注册</a>
+            </p>
         </div>
-        {% else %}
-        <!-- 已登录视图 -->
-        <div id="mainView">
-            <div class="header">
-                <h1>知识递归学习引擎</h1>
-                <p>欢迎回来，{{ user.username }}！当前版本:
-                    <span class="status-badge {{ user.plan.name }}">{{ user.plan.name.upper() }}</span>
-                    <button class="btn btn-danger" style="padding: 4px 10px; font-size: 12px; margin-left:10px;"
-                        onclick="logout()">退出</button>
-                </p>
-                <div style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 15px;">
-                    <input type="text" id="redeemCode" placeholder="输入升级解锁码" style="margin:0; width:150px;">
-                    <button class="btn btn-warning" onclick="redeemKey()">卡密升级</button>
-                    <button class="btn btn-success" onclick="backupCloud()">备份至云端</button>
-                </div>
-            </div>
-
-            <!-- 控制面板：同前，但限制逻辑在后端 -->
-            <div class="card">
-                <h3>1. 创建知识领域</h3>
-                <p style="font-size: 13px; color: #666;">已创建领域：<span id="domainsCount">{{ counts.domains }}</span> / {%
-                    if user.plan.max_domains == -1 %}无限{% else %}{{ user.plan.max_domains }}{% endif %}</p>
-                <div style="display: flex; align-items: center; margin-top: 15px;">
-                    <input type="text" id="domainName" placeholder="输入领域名称">
-                    <button id="createDomainBtn" class="btn" onclick="createDomain()">创建领域</button>
-                </div>
-            </div>
-
-            <div class="card">
-                <h3>2. AI 递归出题</h3>
-                <p style="font-size: 13px; color: #666;">今日已出题：<span id="quizzesCount">{{ counts.today_quizzes }}</span>
-                    / {% if user.plan.quiz_daily_limit == -1 %}无限{% else %}{{ user.plan.quiz_daily_limit }}{% endif %}
-                </p>
-                <div style="margin-top: 15px;">
-                    <button id="quizBtn" class="btn" onclick="genQuiz()">AI 自动出题</button>
-                </div>
-                <div id="quizResult"
-                    style="margin-top: 15px; padding: 15px; background: #f8f9fa; border-radius: 6px; display: none; white-space: pre-wrap; font-size: 14px;">
-                </div>
-            </div>
-
-            <div class="card" style="text-align: center;">
-                <h3>3. 沉浸式知识网络学习</h3>
-                <p style="font-size: 13px; color: #666;">与AI对话，自动抽取专业术语生成本地私有知识图谱，本地执行不上传数据</p>
-                <p style="font-size: 13px; color: #666;">当前图谱节点数：{{ counts.terms }} / {% if user.plan.max_terms == -1
-                    %}无限{% else %}{{ user.plan.max_terms }}{% endif %}</p>
-                <div style="margin-top: 15px;">
-                    <button class="btn btn-success" style="width: 200px; padding: 12px; font-size: 16px;"
-                        onclick="window.location.href='/chat'">进入学习对话</button>
-                </div>
-            </div>
-        </div>
-        {% endif %}
     </div>
+    {% else %}
+    <!-- 登录后视图 -->
+    <div class="app-container">
+        <!-- 侧边栏 -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="user-profile">
+                    <div class="avatar">{{ user.username[0].upper() }}</div>
+                    <div>
+                        <div style="font-weight: 600;">{{ user.username }}</div>
+                        <span class="plan-badge">{{ user.plan.name }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stat-grid">
+                <div class="stat-card">
+                    <span class="stat-value" id="termsCount">{{ counts.terms }}</span>
+                    <span class="stat-label">知识节点</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-value" id="domainsCount">{{ counts.domains }}</span>
+                    <span class="stat-label">学习领域</span>
+                </div>
+            </div>
+
+            <div class="nav-section">
+                <span class="nav-label">领域管理</span>
+                <div class="tool-card">
+                    <input type="text" id="domainName" placeholder="新领域名称...">
+                    <button class="btn btn-primary" style="font-size: 12px; padding: 6px;"
+                        onclick="createDomain()">创建领域</button>
+                </div>
+            </div>
+
+            <div class="nav-section">
+                <span class="nav-label">AI 工具</span>
+                <button class="btn"
+                    style="width: 100%; background: var(--glass-bg); color: var(--text-main); font-size: 13px; margin-bottom: 8px; border: 1px solid var(--border);"
+                    onclick="genQuiz()">生成递归题目</button>
+                <div id="quizShort"
+                    style="font-size: 12px; color: var(--text-muted); padding: 5px; max-height: 100px; overflow: hidden;">
+                </div>
+            </div>
+
+            <div style="flex: 1;"></div>
+
+            <div class="nav-section">
+                <button class="btn"
+                    style="width: 100%; background: #28a74555; color: #5eff5e; border: 1px solid #28a745; margin-bottom: 10px;"
+                    onclick="backupCloud()">同步云端</button>
+                <button class="btn"
+                    style="width: 100%; background: rgba(239, 68, 68, 0.1); color: #f87171; border: 1px solid #ef444422;"
+                    onclick="logout()">退出登录</button>
+            </div>
+        </aside>
+
+        <!-- 主内容区 -->
+        <main class="main-content">
+            <!-- 知识图谱 (占据背景) -->
+            <div class="graph-container">
+                <div id="mynetwork"></div>
+            </div>
+
+            <!-- 对话面板 (悬浮或靠右) -->
+            <div class="chat-panel">
+                <div class="chat-header">
+                    <h3 style="font-size: 16px;">AI 导师</h3>
+                    <button onclick="clearContext()"
+                        style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 12px;">清空对话</button>
+                </div>
+                <div class="chat-history" id="chatHistory">
+                    <!-- 动态加载 -->
+                </div>
+                <div class="input-area">
+                    <input type="text" id="userInput" class="chat-input" placeholder="输入知识点开始递归学习..."
+                        autocomplete="off">
+                    <button id="sendBtn" class="send-btn" onclick="sendMessage()">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </main>
+    </div>
+    {% endif %}
 
     <div id="toast"></div>
 
     <script>
+        // ==========================================
+        // 1. 通用辅助函数
+        // ==========================================
         function showToast(msg, isError = false) {
             const toast = document.getElementById("toast");
             toast.innerText = msg;
-            toast.style.backgroundColor = isError ? "#dc3545" : "#28a745";
+            toast.style.background = isError ? "#ef4444" : "#10b981";
             toast.className = "show";
-            setTimeout(() => { toast.className = toast.className.replace("show", ""); }, 3000);
+            setTimeout(() => { toast.className = ""; }, 3000);
         }
 
+        // ==========================================
+        // 2. 身份认证与基础操作
+        // ==========================================
         async function login() {
             const u = document.getElementById('username').value;
             const p = document.getElementById('password').value;
-            if (!u || !p) return showToast('请输入账号和密码', true);
-
             const res = await fetch('/api/auth/login', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username: u, password: p })
             });
             const data = await res.json();
-            if (data.code === 0) {
-                showToast('登录成功，正在刷新...');
-                setTimeout(() => location.reload(), 1000);
-            } else {
-                showToast(data.msg, true);
-            }
+            if (data.code === 0) location.reload(); else showToast(data.msg, true);
         }
 
         async function register() {
             const u = document.getElementById('username').value;
             const p = document.getElementById('password').value;
-            if (!u || !p) return showToast('请输入完整', true);
-
             const res = await fetch('/api/auth/register', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username: u, password: p })
@@ -296,30 +540,10 @@
             showToast(data.msg, data.code !== 0);
         }
 
-        async function logout() {
-            await fetch('/api/auth/logout', { method: 'POST' });
-            location.reload();
-        }
-
-        async function redeemKey() {
-            const code = document.getElementById('redeemCode').value;
-            if (!code) return showToast('请输入卡密', true);
-
-            const res = await fetch('/api/auth/redeem', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ key_code: code })
-            });
-            const data = await res.json();
-            if (data.code === 0) {
-                showToast(data.msg);
-                setTimeout(() => location.reload(), 1500);
-            } else {
-                showToast(data.msg, true);
-            }
-        }
+        async function logout() { await fetch('/api/auth/logout', { method: 'POST' }); location.reload(); }
 
         async function backupCloud() {
-            showToast("正在打包本地数据并备份至云端...");
+            showToast("正在备份至云端...");
             const res = await fetch('/api/backup/upload', { method: 'POST' });
             const data = await res.json();
             showToast(data.msg, data.code !== 0);
@@ -331,25 +555,165 @@
                 method: "POST", headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name || '新领域' })
             });
             const data = await res.json();
-            showToast(data.msg, data.code !== 0);
             if (data.code === 0) {
+                showToast("领域创建成功");
                 document.getElementById('domainsCount').innerText = parseInt(document.getElementById('domainsCount').innerText) + 1;
-            }
+            } else showToast(data.msg, true);
         }
 
         async function genQuiz() {
             const res = await fetch("/api/quiz/generate", { method: "POST" });
             const data = await res.json();
             if (data.code === 0) {
-                showToast(data.msg);
-                document.getElementById('quizzesCount').innerText = parseInt(document.getElementById('quizzesCount').innerText) + 1;
-                const resultDiv = document.getElementById("quizResult");
-                resultDiv.style.display = "block";
-                resultDiv.innerText = data.quiz;
-            } else {
-                showToast(data.msg, true);
+                showToast("AI 已生成递归题目");
+                document.getElementById('quizShort').innerText = data.quiz;
+            } else showToast(data.msg, true);
+        }
+
+        async function clearContext() {
+            if (confirm("确定清空对话上下文吗？知识图谱将保留。")) {
+                await fetch('/api/chat/clear', { method: 'POST' });
+                document.getElementById('chatHistory').innerHTML = '';
+                showToast("上下文已清空");
             }
         }
+
+        // ==========================================
+        // 3. 知识图谱引擎 (Vis.js)
+        // ==========================================
+        {% if user %}
+        const nodes = new vis.DataSet({{ initial_nodes | tojson | safe }});
+        const edges = new vis.DataSet({{ initial_edges | tojson | safe }});
+        const chatHistoryData = {{ chat_history | tojson | safe }};
+
+        const container = document.getElementById('mynetwork');
+        const networkData = { nodes, edges };
+        const networkOptions = {
+            nodes: {
+                shape: 'dot', size: 16,
+                font: { size: 12, color: '#f1f5f9' },
+                borderWidth: 2, shadow: true
+            },
+            edges: {
+                width: 1, color: { color: 'rgba(255,255,255,0.2)', highlight: '#818cf8' },
+                arrows: { to: { enabled: true, scaleFactor: 0.5 } },
+                smooth: { type: 'continuous' }
+            },
+            physics: {
+                forceAtlas2Based: { gravitationalConstant: -30, centralGravity: 0.01, springLength: 100 },
+                solver: 'forceAtlas2Based', stabilization: { iterations: 100 }
+            }
+        };
+        const network = new vis.Network(container, networkData, networkOptions);
+
+        network.on("selectNode", function (params) {
+            if (params.nodes.length > 0) {
+                const node = nodes.get(params.nodes[0]);
+                document.getElementById('userInput').value = `解释一下 ${node.label}`;
+            }
+        });
+
+        function highlightNode(nodeId) {
+            if (nodes.get(nodeId)) {
+                network.selectNodes([nodeId]);
+                network.focus(nodeId, { scale: 1.2, animation: { duration: 1000 } });
+            }
+        }
+
+        function updateGraph(newEntities, newRelations) {
+            newEntities.forEach(ent => { if (!nodes.get(ent.id)) nodes.add({ id: ent.id, label: ent.label, group: ent.group }); });
+            newRelations.forEach(rel => {
+                const id = `${rel.from}-${rel.to}-${rel.label}`;
+                if (!edges.get(id)) edges.add({ id, from: rel.from, to: rel.to, label: rel.label });
+            });
+            document.getElementById('termsCount').innerText = nodes.length;
+        }
+
+        // ==========================================
+        // 4. 对话逻辑与高亮渲染
+        // ==========================================
+        const chatHistEl = document.getElementById('chatHistory');
+        const userInput = document.getElementById('userInput');
+
+        function renderWithHighlights(bubble, text, entities) {
+            if (!entities || entities.length === 0) { bubble.innerText = text; return; }
+            const sorted = [...entities].sort((a, b) => b.label.length - a.label.length);
+            let html = text;
+            const reps = [];
+            sorted.forEach((ent, i) => {
+                const regex = new RegExp(ent.label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+                if (regex.test(html)) {
+                    const placeholder = `__T${i}__`;
+                    html = html.replace(regex, placeholder);
+                    reps.push({ placeholder, html: `<span class="term-highlight" onclick="highlightNode('${ent.id}')">${ent.label}</span>` });
+                }
+            });
+            reps.forEach(r => html = html.split(r.placeholder).join(r.html));
+            bubble.innerHTML = html;
+        }
+
+        function appendMessage(role, text, entities = null) {
+            const div = document.createElement('div');
+            div.className = `message ${role}`;
+            const bubble = document.createElement('div');
+            bubble.className = 'bubble';
+            if (role === 'ai') renderWithHighlights(bubble, text, entities || nodes.get());
+            else bubble.innerText = text;
+            div.appendChild(bubble);
+            chatHistEl.appendChild(div);
+            chatHistEl.scrollTop = chatHistEl.scrollHeight;
+            return bubble;
+        }
+
+        // 初始加载历史
+        chatHistoryData.forEach(msg => appendMessage(msg.role, msg.content));
+
+        async function sendMessage() {
+            const text = userInput.value.trim();
+            if (!text) return;
+            appendMessage('user', text);
+            userInput.value = '';
+
+            const aiBubble = appendMessage('ai', '...');
+            let buffer = "";
+
+            try {
+                const res = await fetch('/api/chat', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: text })
+                });
+                const reader = res.body.getReader();
+                const decoder = new TextDecoder();
+                let eventBuffer = "";
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    eventBuffer += decoder.decode(value);
+                    let lines = eventBuffer.split('\n\n');
+                    eventBuffer = lines.pop();
+
+                    for (let line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const payload = JSON.parse(line.substring(6));
+                            if (payload.type === 'chunk') {
+                                buffer += payload.content;
+                                const match = buffer.match(/"reply"\s*:\s*"((?:[^"\\]|\\.)*)/);
+                                if (match) aiBubble.innerText = match[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
+                            } else if (payload.type === 'done') {
+                                updateGraph(payload.entities || [], payload.relations || []);
+                                renderWithHighlights(aiBubble, payload.reply_final, payload.entities);
+                            }
+                        }
+                    }
+                }
+            } catch (e) {
+                aiBubble.innerText = "Error: " + e.message;
+            }
+        }
+
+        userInput.onkeypress = (e) => { if (e.key === 'Enter') sendMessage(); };
+        {% endif %}
     </script>
 </body>
 

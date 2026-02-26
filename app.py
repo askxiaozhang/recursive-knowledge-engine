@@ -36,55 +36,57 @@ def get_user_counts():
     }
 
 # ==========================================
-# 3. 页面路由
+# 3. 页面数据辅助函数
 # ==========================================
-@app.route("/")
-def index():
-    user = get_current_user()
-    if not user:
-        # 如果未登录，只传默认的展示态
-        return render_template("index.html", user=None, counts={"domains":0, "today_quizzes":0})
-    
-    counts = get_user_counts()
-    return render_template("index.html", user=user, counts=counts)
-
-@app.route("/chat")
-def chat_page():
-    user = get_current_user()
-    if not user:
-        return "请先在首页登录！", 401
-    
-    if user['plan']['id'] == 1: # 免费版限制
-         # 只要登录了允许进入体验，由内层接口控制
-         pass
-         
+def get_app_data():
     conn = get_local_db()
     c = conn.cursor()
     terms_db = c.execute('SELECT * FROM terms').fetchall()
     relations_db = c.execute('SELECT * FROM relations').fetchall()
-    
-    # 获取历史聊天记录
     chat_history_db = c.execute('SELECT role, content FROM chat_history ORDER BY id ASC').fetchall()
     conn.close()
 
     initial_nodes = []
     for t in terms_db:
-        initial_nodes.append({"id": t["id"], "label": t["label"], "group": t["group_type"]})
+        initial_nodes.append({"id": str(t["id"]), "label": t["label"], "group": t["group_type"]})
 
     initial_edges = []
     for r in relations_db:
         initial_edges.append({
             "id": r["id"],
-            "from": r["source"],
-            "to": r["target"],
+            "from": str(r["source"]),
+            "to": str(r["target"]),
             "label": r["label"]
         })
         
     chat_history = []
     for msg in chat_history_db:
         chat_history.append({"role": msg["role"], "content": msg["content"]})
+    
+    return initial_nodes, initial_edges, chat_history
 
-    return render_template("chat.html", user=user, initial_nodes=initial_nodes, initial_edges=initial_edges, chat_history=chat_history)
+# ==========================================
+# 4. 页面路由
+# ==========================================
+@app.route("/")
+def index():
+    user = get_current_user()
+    if not user:
+        return render_template("index.html", user=None, counts={"domains":0, "today_quizzes":0, "terms":0})
+    
+    counts = get_user_counts()
+    initial_nodes, initial_edges, chat_history = get_app_data()
+    
+    return render_template("index.html", 
+                           user=user, 
+                           counts=counts, 
+                           initial_nodes=initial_nodes, 
+                           initial_edges=initial_edges, 
+                           chat_history=chat_history)
+
+@app.route("/chat")
+def chat_page():
+    return index()
 
 # ==========================================
 # 4. 代理云端鉴权接口

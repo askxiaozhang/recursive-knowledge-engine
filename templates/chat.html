@@ -256,6 +256,22 @@
             background: #c1c1c1;
             border-radius: 3px;
         }
+
+        /* 专业名词高亮样式 */
+        .term-highlight {
+            font-weight: bold;
+            text-decoration: underline;
+            color: var(--primary);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            padding: 0 2px;
+            border-radius: 4px;
+        }
+
+        .term-highlight:hover {
+            color: var(--primary-hover);
+            background-color: rgba(0, 123, 255, 0.1);
+        }
     </style>
 </head>
 
@@ -374,6 +390,73 @@
         const sendBtn = document.getElementById('sendBtn');
         const chatHistory = document.getElementById('chatHistory');
 
+        /**
+         * 在消息气泡中高亮专业名词
+         */
+        function renderMessageWithHighlights(bubble, text, entities) {
+            if (!entities || entities.length === 0) {
+                bubble.innerText = text;
+                return;
+            }
+
+            // 按长度从大到小排序，防止长度短的名词先被替换
+            const sortedEntities = [...entities].sort((a, b) => b.label.length - a.label.length);
+
+            let html = text;
+            // 为了避免重复替换（例如替换了 A 包含 B 的情况，或者替换出的 HTML 标签被再次匹配）
+            // 我们先找到所有匹配项，记录位置，或者简单起见使用特定的占位符
+
+            // 简单实现：使用标记位替换
+            const replacements = [];
+            sortedEntities.forEach((ent, index) => {
+                const label = ent.label;
+                const id = ent.id;
+                const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const regex = new RegExp(escapedLabel, 'g');
+
+                if (regex.test(html)) {
+                    // 使用唯一占位符
+                    const placeholder = `___TERM_${index}___`;
+                    html = html.replace(regex, placeholder);
+                    replacements.push({
+                        placeholder: placeholder,
+                        html: `<span class="term-highlight" data-node-id="${id}">${label}</span>`
+                    });
+                }
+            });
+
+            // 还原占位符为 HTML
+            replacements.forEach(r => {
+                html = html.split(r.placeholder).join(r.html);
+            });
+
+            bubble.innerHTML = html;
+
+            // 绑定点击事件
+            bubble.querySelectorAll('.term-highlight').forEach(el => {
+                el.onclick = (e) => {
+                    const nodeId = el.getAttribute('data-node-id');
+                    highlightNodeInGraph(nodeId);
+                };
+            });
+        }
+
+        /**
+         * 在图谱中高亮并聚焦节点
+         */
+        function highlightNodeInGraph(nodeId) {
+            if (nodes.get(nodeId)) {
+                network.selectNodes([nodeId]);
+                network.focus(nodeId, {
+                    scale: 1.2,
+                    animation: {
+                        duration: 1000,
+                        easingFunction: 'easeInOutQuad'
+                    }
+                });
+            }
+        }
+
         // 回车发送
         userInput.addEventListener('keypress', function (e) {
             if (e.key === 'Enter') {
@@ -381,13 +464,18 @@
             }
         });
 
-        function appendMessage(role, text) {
+        function appendMessage(role, text, entities = null) {
             const msgDiv = document.createElement('div');
             msgDiv.className = `message ${role}`;
 
             const bubble = document.createElement('div');
             bubble.className = 'bubble';
-            bubble.innerText = text;
+
+            if (role === 'ai') {
+                renderMessageWithHighlights(bubble, text, entities || nodes.get());
+            } else {
+                bubble.innerText = text;
+            }
 
             msgDiv.appendChild(bubble);
             chatHistory.appendChild(msgDiv);
@@ -543,11 +631,12 @@
                                         }
                                     }
                                 } else if (payload.type === 'done') {
-                                    if (payload.reply_final) {
-                                        aiBubble.innerText = payload.reply_final;
-                                    }
                                     if (payload.entities || payload.relations) {
                                         updateGraph(payload.entities || [], payload.relations || []);
+                                    }
+                                    if (payload.reply_final) {
+                                        // 最终渲染带高亮的内容
+                                        renderMessageWithHighlights(aiBubble, payload.reply_final, payload.entities);
                                     }
                                     scrollToBottom();
                                 } else if (payload.type === 'error') {
