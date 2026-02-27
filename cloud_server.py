@@ -63,8 +63,8 @@ def init_db():
 
     # 插入默认的权限记录
     plans_data = [
-        (1, 'free', 1, 50, False, 0, False),
-        (2, 'basic', -1, -1, True, 20, True),
+        (1, 'free', -1, -1, True, -1, True),
+        (2, 'basic', -1, -1, True, -1, True),
         (3, 'pro', -1, -1, True, -1, True)
     ]
     for p in plans_data:
@@ -184,16 +184,16 @@ def upload_backup():
         conn.close()
         return jsonify({"code": 1, "msg": "用户不存在"}), 404
 
-    # 判断方案是否支持备份 (Pro / Basic 可能才支持)
-    plan = c.execute('SELECT allow_dl_backup FROM plans WHERE id = ?', (user['plan_id'],)).fetchone()
-    if not plan or not plan['allow_dl_backup']:
-        conn.close()
-        return jsonify({"code": 1, "msg": "当前版本不支持云端备份，请升级！"}), 403
+    # 判断方案是否支持备份 (已全部放开)
+    # plan = c.execute('SELECT allow_dl_backup FROM plans WHERE id = ?', (user['plan_id'],)).fetchone()
+    # if not plan or not plan['allow_dl_backup']:
+    #     conn.close()
+    #     return jsonify({"code": 1, "msg": "当前版本不支持云端备份，请升级！"}), 403
 
-    # 一天一次限制
-    if user['last_backup_date'] == today_str:
-        conn.close()
-        return jsonify({"code": 1, "msg": "今天已经备份过了，请明天再来"}), 400
+    # 一天一次限制 (已全部放开)
+    # if user['last_backup_date'] == today_str:
+    #     conn.close()
+    #     return jsonify({"code": 1, "msg": "今天已经备份过了，请明天再来"}), 400
 
     json_str = json.dumps(backup_data) if isinstance(backup_data, dict) else backup_data
     
