@@ -422,6 +422,14 @@
     <div class="navbar">
         <a href="/" class="back-btn">&larr; 返回首页</a>
         <div class="title">递归学习引擎 - 领域对话</div>
+        <select id="domainSelector"
+            style="margin-left: 20px; background: rgba(0, 0, 0, 0.05); border: 1px solid var(--border); border-radius: 8px; padding: 4px 8px; font-size: 13px;"
+            onchange="switchDomain(this.value)">
+            {% for domain in all_domains %}
+            <option value="{{ domain.id }}" {% if domain.id==current_domain_id %}selected{% endif %}>{{ domain.name }}
+            </option>
+            {% endfor %}
+        </select>
         <div style="flex: 1;"></div>
         <button class="backup-btn" onclick="uploadBackup()"
             style="margin-right: 20px; background-color: #28a745; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 14px;">上传云端备份
@@ -483,6 +491,11 @@
         const initialNodes = {{ initial_nodes | tojson | safe }};
         const initialEdges = {{ initial_edges | tojson | safe }};
         const chatHistoryData = {{ chat_history | tojson | safe }};
+        const currentDomainId = {{ current_domain_id|default ('null') }};
+
+        function switchDomain(domainId) {
+            window.location.href = "/chat?domain_id=" + domainId;
+        }
 
         // 存储当前图谱数据的对象
         const nodes = new vis.DataSet(initialNodes);
@@ -538,7 +551,11 @@
 
                 // 2. 调用后端接口清空当前聊天记录（不影响知识图谱本体）
                 try {
-                    await fetch('/api/chat/clear', { method: 'POST' });
+                    await fetch('/api/chat/clear', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ domain_id: currentDomainId })
+                    });
                 } catch (e) {
                     console.error("清空历史记录失败:", e);
                 }
@@ -771,7 +788,7 @@
                 const res = await fetch('/api/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: text })
+                    body: JSON.stringify({ message: text, domain_id: currentDomainId })
                 });
 
                 if (!res.ok) {
@@ -897,7 +914,7 @@
                 const res = await fetch(`/api/notes/${currentEditingNodeId}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ notes: notes })
+                    body: JSON.stringify({ notes: notes, domain_id: currentDomainId })
                 });
                 const data = await res.json();
                 if (data.code === 0) {
@@ -1014,7 +1031,7 @@
             easyMDE.value('正在加载笔记...');
 
             try {
-                const res = await fetch(`/api/notes/${nodeId}`);
+                const res = await fetch(`/api/notes/${nodeId}?domain_id=${currentDomainId}`);
                 const data = await res.json();
                 if (data.code === 0) {
                     easyMDE.value(data.notes || '');

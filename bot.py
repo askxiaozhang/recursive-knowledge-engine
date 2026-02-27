@@ -17,24 +17,35 @@ class Bot:
         self.model = os.getenv("OPENAI_MODEL")
         
         if not self.api_key:
-            raise ValueError("DASHSCOPE_API_KEY 环境变量未加载成功，请检查.env文件")
+            print("Warning: DASHSCOPE_API_KEY / OPENAI_API_KEY 环境变量未加载，将依赖前端传入的配置。")
         if not self.model:
-            raise ValueError("OPENAI_MODEL 环境变量未设置")
+            print("Warning: OPENAI_MODEL 环境变量未设置，将依赖前端传入的配置。")
             
-        # 初始化OpenAI客户端
-        self.client = OpenAI(
-            api_key=self.api_key,
-            base_url=self.base_url,
-        )
+        # 延迟初始化在调用时进行，或者保留一个默认client
+        if self.api_key:
+            self.client = OpenAI(
+                api_key=self.api_key,
+                base_url=self.base_url,
+            )
+        else:
+            self.client = None
 
-    def chat(self, prompt: str = None, messages: list = None, **kwargs) -> str:
+    def chat(self, prompt: str = None, messages: list = None, api_key: str = None, base_url: str = None, model: str = None, **kwargs) -> str:
         """发送单轮对话请求"""
         try:
             if messages is None:
                 messages = [{"role": "user", "content": prompt}]
             
-            completion = self.client.chat.completions.create(
-                model=self.model,
+            used_api_key = api_key or self.api_key
+            used_base_url = base_url or self.base_url
+            used_model = model or self.model
+            
+            client = OpenAI(api_key=used_api_key, base_url=used_base_url) if used_api_key else self.client
+            if not client:
+                raise ValueError("API Key 缺失：请在前端页面配置 API Key 或在 .env 中设置。")
+                
+            completion = client.chat.completions.create(
+                model=used_model,
                 messages=messages,
                 **kwargs
             )
@@ -43,14 +54,22 @@ class Bot:
             print(f"调用 API 出现错误：{e}")
             raise e
 
-    def chat_stream(self, prompt: str = None, messages: list = None, **kwargs):
+    def chat_stream(self, prompt: str = None, messages: list = None, api_key: str = None, base_url: str = None, model: str = None, **kwargs):
         """发送单轮对话请求（流式）"""
         try:
             if messages is None:
                 messages = [{"role": "user", "content": prompt}]
             
-            completion = self.client.chat.completions.create(
-                model=self.model,
+            used_api_key = api_key or self.api_key
+            used_base_url = base_url or self.base_url
+            used_model = model or self.model
+            
+            client = OpenAI(api_key=used_api_key, base_url=used_base_url) if used_api_key else self.client
+            if not client:
+                raise ValueError("API Key 缺失：请在前端页面配置 API Key 或在 .env 中设置。")
+            
+            completion = client.chat.completions.create(
+                model=used_model,
                 messages=messages,
                 stream=True,
                 stream_options={"include_usage": True},
