@@ -1,5 +1,10 @@
 # 递归知识引擎 (Recursive Knowledge Engine)
 
+> **本项目/产品参考：**
+> 本项目灵感来源于 Gabriel Petersson（从高中辍学生到 OpenAI 研究员）在视频 [How to Learn Anything Fast](https://www.youtube.com/watch?v=vq5WhoPCWQ8) 中分享的核心学习方法论。
+>
+> Gabriel 的核心理念可以概括为：利用 AI 进行**“递归式查漏补缺”（Recursive Gap Filling）**的自顶向下学习，并结合极高的**主观能动性（High Agency）**通过实际作品证明价值。本项目正是将其理念具象化，开发出的智能学习辅助工具。
+
 这是一个基于 **“云端鉴权 + 本地执行”** 架构的智能知识图谱与学习辅助系统。它能够通过与 AI 的深度对话，自动提取专业术语、构建知识联系，并以动态交互的知识图谱形式展现，旨在通过“递归式”的深入探索帮助用户彻底掌握核心概念。
 
 ---
