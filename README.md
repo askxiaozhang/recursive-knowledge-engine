@@ -4,6 +4,8 @@
 
 ---
 
+![系统全景展示](images/demo2.png)
+
 ## 📂 项目结构
 
 ```text
@@ -68,6 +70,8 @@ python app.py
 *   当你学习了一段时间后，点击左侧按钮 **“分析薄弱点闭环”**。
 *   系统会根据您的学习记录，随机识别并高亮显示一个知识薄弱节点，通过红色高亮其依赖路径。
 
+![薄弱点诊断示例](images/demo.png)
+
 ### 3. AI 题目生成
 *   根据诊断出的薄弱点，选中该红色节点。
 *   点击 **“生成递归题目”**。
@@ -97,4 +101,3 @@ python app.py
 *   **联系方式**: [askxiaozhang@163.com](mailto:askxiaozhang@163.com)
 
 ---
-*Powered by Antigravity Design System*
