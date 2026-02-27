@@ -4,8 +4,8 @@ import sqlite3
 import json
 import datetime
 from dotenv import load_dotenv
-from bot import Bot
-from database import get_local_db
+from core.bot import Bot
+from core.database import get_local_db
 load_dotenv()
 
 bot = Bot()
