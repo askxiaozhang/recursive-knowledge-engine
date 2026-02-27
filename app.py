@@ -1,12 +1,11 @@
-from flask import Flask, request, jsonify, render_template, session, Response, stream_with_context
+from flask import Flask, request, jsonify, render_template, Response, stream_with_context
 import os
 import sqlite3
-import requests
 import json
 import datetime
 from dotenv import load_dotenv
-from bot import Bot
-from database import get_local_db
+from core.bot import Bot
+from core.database import get_local_db
 load_dotenv()
 
 bot = Bot()
@@ -14,13 +13,9 @@ bot = Bot()
 app = Flask(__name__)
 app.secret_key = "local_client_secret_key"  # 用于session
 
-CLOUD_SERVER_URL = "http://127.0.0.1:5001"
 # ==========================================
-# 2. 会话权限辅助函数
+# 2. 会话权限辅助函数 (已改为纯本地)
 # ==========================================
-def get_current_user():
-    return session.get("user")
-
 def get_user_counts():
     conn = get_local_db()
     c = conn.cursor()
@@ -36,149 +31,75 @@ def get_user_counts():
     }
 
 # ==========================================
-# 3. 页面路由
+# 3. 页面数据辅助函数
 # ==========================================
-@app.route("/")
-def index():
-    user = get_current_user()
-    if not user:
-        # 如果未登录，只传默认的展示态
-        return render_template("index.html", user=None, counts={"domains":0, "today_quizzes":0})
-    
-    counts = get_user_counts()
-    return render_template("index.html", user=user, counts=counts)
-
-@app.route("/chat")
-def chat_page():
-    user = get_current_user()
-    if not user:
-        return "请先在首页登录！", 401
-    
-    if user['plan']['id'] == 1: # 免费版限制
-         # 只要登录了允许进入体验，由内层接口控制
-         pass
-         
+def get_app_data(domain_id=None):
     conn = get_local_db()
     c = conn.cursor()
-    terms_db = c.execute('SELECT * FROM terms').fetchall()
-    relations_db = c.execute('SELECT * FROM relations').fetchall()
     
-    # 获取历史聊天记录
-    chat_history_db = c.execute('SELECT role, content FROM chat_history ORDER BY id ASC').fetchall()
+    if not domain_id:
+        domain = c.execute("SELECT id FROM domains ORDER BY id DESC LIMIT 1").fetchone()
+        if domain:
+            domain_id = domain["id"]
+        else:
+            c.execute('INSERT INTO domains (name, created_at) VALUES (?, ?)', ("默认领域", datetime.datetime.now().isoformat()))
+            domain_id = c.lastrowid
+            conn.commit()
+
+    terms_db = c.execute('SELECT * FROM terms WHERE domain_id = ?', (domain_id,)).fetchall()
+    relations_db = c.execute('SELECT * FROM relations WHERE domain_id = ?', (domain_id,)).fetchall()
+    chat_history_db = c.execute('SELECT role, content FROM chat_history WHERE domain_id = ? ORDER BY id ASC', (domain_id,)).fetchall()
+    
+    all_domains_db = c.execute('SELECT id, name FROM domains ORDER BY id DESC').fetchall()
+    all_domains = [{"id": d["id"], "name": d["name"]} for d in all_domains_db]
+
     conn.close()
 
     initial_nodes = []
     for t in terms_db:
-        initial_nodes.append({"id": t["id"], "label": t["label"], "group": t["group_type"]})
+        initial_nodes.append({"id": str(t["id"]), "label": t["label"], "group": t["group_type"]})
 
     initial_edges = []
     for r in relations_db:
         initial_edges.append({
             "id": r["id"],
-            "from": r["source"],
-            "to": r["target"],
+            "from": str(r["source"]),
+            "to": str(r["target"]),
             "label": r["label"]
         })
         
     chat_history = []
     for msg in chat_history_db:
         chat_history.append({"role": msg["role"], "content": msg["content"]})
-
-    return render_template("chat.html", user=user, initial_nodes=initial_nodes, initial_edges=initial_edges, chat_history=chat_history)
+    
+    return initial_nodes, initial_edges, chat_history, all_domains, domain_id
 
 # ==========================================
-# 4. 代理云端鉴权接口
+# 4. 页面路由
 # ==========================================
-@app.route("/api/auth/register", methods=["POST"])
-def auth_register():
-    try:
-        resp = requests.post(f"{CLOUD_SERVER_URL}/api/auth/register", json=request.json, timeout=5)
-        return jsonify(resp.json()), resp.status_code
-    except Exception as e:
-        return jsonify({"code": 1, "msg": "连接云端服务器失败"}), 500
-
-@app.route("/api/auth/login", methods=["POST"])
-def auth_login():
-    try:
-        resp = requests.post(f"{CLOUD_SERVER_URL}/api/auth/login", json=request.json, timeout=5)
-        data = resp.json()
-        if data.get('code') == 0:
-            # 登录成功，将云端返回的用户权限保存在本地 session
-            session['user'] = data['data']
-        return jsonify(data), resp.status_code
-    except Exception as e:
-        return jsonify({"code": 1, "msg": "连接云端服务器失败"}), 500
-
-@app.route("/api/auth/logout", methods=["POST"])
-def auth_logout():
-    session.pop('user', None)
-    return jsonify({"code": 0, "msg": "已退出登录"})
-
-@app.route("/api/auth/redeem", methods=["POST"])
-def auth_redeem():
-    user = get_current_user()
-    if not user:
-        return jsonify({"code": 1, "msg": "未登录"}), 401
-    try:
-        payload = {"user_id": user['user_id'], "key_code": request.json.get('key_code')}
-        resp = requests.post(f"{CLOUD_SERVER_URL}/api/auth/redeem", json=payload, timeout=5)
-        data = resp.json()
-        if data.get('code') == 0:
-            # 兑换成功，重新拉取用户信息或直接修改 session (这里简单处理为让用户重新登录，或者直接更新 plan_id, 这里选择直接更新部分)
-            # 最好是要求用户重新登录，简单起见我们提示重新登录
-            session.pop('user', None) 
-            data['msg'] += " 请重新登录以刷新权限。"
-        return jsonify(data), resp.status_code
-    except Exception as e:
-        return jsonify({"code": 1, "msg": "连接云端服务器失败"}), 500
-
-@app.route("/api/backup/upload", methods=["POST"])
-def backup_upload():
-    user = get_current_user()
-    if not user:
-        return jsonify({"code": 1, "msg": "未登录"}), 401
+@app.route("/")
+def index():
+    domain_id = request.args.get('domain_id', type=int)
+    counts = get_user_counts()
+    initial_nodes, initial_edges, chat_history, all_domains, current_domain_id = get_app_data(domain_id)
     
-    # 提取本地所有数据
-    conn = get_local_db()
-    c = conn.cursor()
-    domains = [dict(row) for row in c.execute('SELECT * FROM domains').fetchall()]
-    terms = [dict(row) for row in c.execute('SELECT * FROM terms').fetchall()]
-    relations = [dict(row) for row in c.execute('SELECT * FROM relations').fetchall()]
-    chat_history = [dict(row) for row in c.execute('SELECT * FROM chat_history').fetchall()]
-    conn.close()
-    
-    backup_data = {
-        "domains": domains,
-        "terms": terms,
-        "relations": relations,
-        "chat_history": chat_history
-    }
-    
-    payload = {
-        "user_id": user['user_id'],
-        "backup_data": backup_data
-    }
-    
-    try:
-        resp = requests.post(f"{CLOUD_SERVER_URL}/api/backup/upload", json=payload, timeout=10)
-        return jsonify(resp.json()), resp.status_code
-    except Exception as e:
-        return jsonify({"code": 1, "msg": "连接云端服务器备份失败"}), 500
+    return render_template("index.html", 
+                           counts=counts, 
+                           initial_nodes=initial_nodes, 
+                           initial_edges=initial_edges, 
+                           chat_history=chat_history,
+                           all_domains=all_domains,
+                           current_domain_id=current_domain_id)
+
+@app.route("/chat")
+def chat_page():
+    return index()
 
 # ==========================================
-# 5. 本地核心业务接口 (受 session 权限控制)
+# 4. 本地核心业务接口 (已移除登录)
 # ==========================================
 @app.route("/api/domain/create", methods=["POST"])
 def create_domain():
-    user = get_current_user()
-    if not user:
-        return jsonify({"code": 1, "msg": "请先登录"}), 401
-        
-    plan = user['plan']
-    counts = get_user_counts()
-
-    if plan['max_domains'] != -1 and counts['domains'] >= plan['max_domains']:
-        return jsonify({"code": 1, "msg": f"当前版本最多创建{plan['max_domains']}个领域，请升级解锁！"}), 403
 
     domain_name = request.json.get("name", "未命名领域")
     
@@ -192,17 +113,18 @@ def create_domain():
 
 @app.route("/api/quiz/generate", methods=["POST"])
 def gen_quiz():
-    user = get_current_user()
-    if not user:
-        return jsonify({"code": 1, "msg": "请先登录"}), 401
-        
-    plan = user['plan']
-    if not plan['allow_quiz']:
-        return jsonify({"code": 1, "msg": "当前版本支持出题，请升级！"}), 403
-
     counts = get_user_counts()
-    if plan['quiz_daily_limit'] != -1 and counts['today_quizzes'] >= plan['quiz_daily_limit']:
-        return jsonify({"code": 1, "msg": f"今日额度已满 ({plan['quiz_daily_limit']}题)，请升级专业版解锁无限出题！"}), 403
+    if counts['today_quizzes'] >= 5:
+        return jsonify({"code": 1, "msg": "今日免费额度已满 (5题)！"}), 403
+
+    data = request.json or {}
+    node_label = data.get("node_label")
+    api_key = data.get("api_key")
+    base_url = data.get("base_url")
+    model = data.get("model")
+
+    if not node_label:
+        return jsonify({"code": 1, "msg": "未提供节点信息"}), 400
 
     conn = get_local_db()
     c = conn.cursor()
@@ -210,36 +132,85 @@ def gen_quiz():
     conn.commit()
     conn.close()
 
-    return jsonify({"code": 0, "quiz": "1. 解释图谱的作用？\n2. SQLite与MySQL对比？", "msg": "出题成功！"})
+    try:
+        prompt = f"请针对知识节点“{node_label}”生成一道或两道递归思考题，要求能够引导学习者深入理解该概念或其关联机制，题目内容简明扼要，直接输出题目，不要给出答案。"
+        quiz_content = bot.chat(
+            prompt=prompt,
+            api_key=api_key,
+            base_url=base_url,
+            model=model
+        )
+    except Exception as e:
+        print(f"出题失败: {e}")
+        quiz_content = f"关于【{node_label}】的思考题：\n1. 它的核心机制是什么？\n2. 它是为了解决什么问题而产生的？"
+
+    return jsonify({"code": 0, "quiz": quiz_content, "msg": "出题成功！"})
 
 @app.route("/api/chat/clear", methods=["POST"])
 def clear_chat():
-    user = get_current_user()
-    if not user:
-        return jsonify({"code": 1, "msg": "请先登录"}), 401
+    data = request.json or {}
+    domain_id = data.get("domain_id")
+    
+    if not domain_id:
+        return jsonify({"code": 1, "msg": "缺失 domain_id 参数"})
 
     conn = get_local_db()
     c = conn.cursor()
-    c.execute('DELETE FROM chat_history')
+    c.execute('DELETE FROM chat_history WHERE domain_id = ?', (domain_id,))
     conn.commit()
     conn.close()
     
     return jsonify({"code": 0, "msg": "已清空学习上下文"})
 
+@app.route("/api/notes/<node_id>", methods=["GET"])
+def get_notes(node_id):
+    domain_id = request.args.get("domain_id")
+    conn = get_local_db()
+    c = conn.cursor()
+    # 如果节点在不同领域可能重复，可以按 domain_id 过滤。但当前 id 可能是唯一的。
+    # 为了保险，也查询匹配 domain_id 或者不管。我们假设节点 id 全局唯一也可以，但最好按 domain_id 隔离。
+    if domain_id:
+        row = c.execute('SELECT notes FROM terms WHERE id = ? AND domain_id = ?', (node_id, domain_id)).fetchone()
+    else:
+        row = c.execute('SELECT notes FROM terms WHERE id = ?', (node_id,)).fetchone()
+    conn.close()
+    
+    notes = row["notes"] if row and row["notes"] else ""
+    return jsonify({"code": 0, "notes": notes})
+
+@app.route("/api/notes/<node_id>", methods=["POST"])
+def save_notes(node_id):
+    
+    data = request.json
+    notes = data.get("notes", "")
+    domain_id = data.get("domain_id")
+    
+    conn = get_local_db()
+    c = conn.cursor()
+    if domain_id:
+        c.execute('UPDATE terms SET notes = ? WHERE id = ? AND domain_id = ?', (notes, node_id, domain_id))
+    else:
+        c.execute('UPDATE terms SET notes = ? WHERE id = ?', (notes, node_id))
+    conn.commit()
+    conn.close()
+    
+    return jsonify({"code": 0, "msg": "笔记已保存"})
+
 @app.route("/api/chat", methods=["POST"])
 def chat_api():
-    user = get_current_user()
-    if not user:
-        return jsonify({"code": 1, "msg": "请先登录"}), 401
 
     data = request.json
     user_msg = data.get("message", "")
+    domain_id = data.get("domain_id")
+    
+    if not domain_id:
+        return jsonify({"code": 1, "msg": "缺失 domain_id"}), 400
     
     # 本地保存用户消息
     conn = get_local_db()
     c = conn.cursor()
     now_str = datetime.datetime.now().isoformat()
-    c.execute('INSERT INTO chat_history (role, content, created_at) VALUES (?, ?, ?)', ('user', user_msg, now_str))
+    c.execute('INSERT INTO chat_history (role, content, created_at, domain_id) VALUES (?, ?, ?, ?)', ('user', user_msg, now_str, domain_id))
     conn.commit()
     conn.close()
     
@@ -248,35 +219,46 @@ def chat_api():
         try:
             conn_temp = get_local_db()
             c_temp = conn_temp.cursor()
-            existing_terms = [{"id": row["id"], "label": row["label"]} for row in c_temp.execute('SELECT id, label FROM terms').fetchall()]
+            existing_terms = [{"id": row["id"], "label": row["label"]} for row in c_temp.execute('SELECT id, label FROM terms WHERE domain_id = ?', (domain_id,)).fetchall()]
             conn_temp.close()
             
-            # 缩减长列表以避免超出上下文限制，如果非常多的话，可以考虑只取最近的一些，但在此处先全量转JSON
             existing_terms_str = json.dumps(existing_terms, ensure_ascii=False)
             
-            sys_prompt = f"""你是一个智能知识图谱小助手。请回答用户的问题，并从你的回答中提取核心实体和他们之间的关系。请必须以合法的JSON格式返回，不要包含其他文本（不要使用```json），且JSON的结构必须严谨，如下：
-{{"reply": "你的回答内容", "entities": [{{"id": "唯一标识", "label": "显示名", "group": "分类(如concept, domain, model等)"}}], "relations": [{{"from": "实体A的id", "to": "实体B的id", "label": "关系名"}}]}}
+            sys_prompt = f"""你是一个智能知识图谱小助手。请回答用户的问题，并从你的回答中提取核心实体和他们之间的关系。
+请必须以合法的JSON格式返回，不要包含其他文本（不要使用```json），且JSON的结构必须严谨，如下：
+{{"reply": "你的回答内容", "entities": [{{"id": "唯一标识", "label": "显示名", "group": "层次分类"}}], "relations": [{{"from": "实体A的id", "to": "实体B的id", "label": "关系名"}}]}}
 
-为了保持专业术语和关系的一致性，请尽量复用以下现有的实体ID（若图中已存在相关概念，使用已有ID）：
+【重要指示】
+为了实现3层渐进式信息架构展示，你需要对提取出的实体通过"group"字段进行分类。
+"group" 的值必须且只能是以下三者之一：
+1. "core"：核心概念（第一层框架，如用户当前询问的主题实体，通常只能有1个）
+2. "primary"：关键维度节点（第一层框架，如“核心组件”、“解决问题”、“应用场景”、“提出背景”等，最多3-5个）
+3. "detail"：二级及以下补充节点（第二层深度视图，如具体的参数、子技术名词、人名、文献等）
+
+构建 relations 时，优先构建 core 与 primary 之间的连线，以及 primary 与其对应 details 之间的连线。
+
+为了保持专业术语和关系的一致性，请尽量复用以下现有的实体ID：
 {existing_terms_str}"""
 
-            # 调用大模型流式接口
+            api_key = data.get("api_key")
+            base_url = data.get("base_url")
+            model_name = data.get("model")
+            
             for chunk in bot.chat_stream(
                 messages=[
                     {"role": "system", "content": sys_prompt},
                     {"role": "user", "content": user_msg}
-                ]
+                ],
+                api_key=api_key,
+                base_url=base_url,
+                model=model_name
             ):
                 response_buffer += chunk
-                # 实时推送每个字符给前端
                 yield f"data: {json.dumps({'type': 'chunk', 'content': chunk})}\n\n"
                 
-            # 接收完全部流后，统一解析 JSON
             print(f"DEBUG: response_buffer length: {len(response_buffer)}")
-            # 兼容性处理：去除可能存在的 Markdown 代码块标记盒空行
             clean_token = response_buffer.strip()
             if clean_token.startswith("```"):
-                # 如果以 ```json 或 ``` 开头，尝试剥离
                 lines = clean_token.splitlines()
                 if lines[0].startswith("```"):
                     lines = lines[1:]
@@ -292,7 +274,6 @@ def chat_api():
             entities = llm_data.get("entities", [])
             relations = llm_data.get("relations", [])
             
-            # 确保 id 是 string
             for ent in entities:
                 if "id" in ent:
                     ent["id"] = str(ent["id"])
@@ -307,44 +288,30 @@ def chat_api():
             relations = []
             yield f"data: {json.dumps({'type': 'error', 'content': str(e)})}\n\n"
 
-        # 保存 AI 消息与图谱节点（必须新开 DB 连接，避免多线程游标问题）
         try:
             conn2 = get_local_db()
             c2 = conn2.cursor()
-            c2.execute('INSERT INTO chat_history (role, content, created_at) VALUES (?, ?, ?)', ('ai', reply, datetime.datetime.now().isoformat()))
+            c2.execute('INSERT INTO chat_history (role, content, created_at, domain_id) VALUES (?, ?, ?, ?)', ('ai', reply, datetime.datetime.now().isoformat(), domain_id))
             
-            plan = user['plan']
-            current_terms_count = c2.execute('SELECT COUNT(*) FROM terms').fetchone()[0]
-            
-            saved_entities = 0
-            limit_hit = False
             for ent in entities:
-                if plan['max_terms'] != -1 and current_terms_count + saved_entities >= plan['max_terms']:
-                    limit_hit = True
-                    break
                 try:
-                    c2.execute('INSERT OR IGNORE INTO terms (id, label, group_type) VALUES (?, ?, ?)', (ent['id'], ent['label'], ent['group']))
-                    saved_entities += 1
+                    c2.execute('INSERT OR IGNORE INTO terms (id, label, group_type, domain_id) VALUES (?, ?, ?, ?)', (ent['id'], ent['label'], ent['group'], domain_id))
                 except Exception:
                     pass
                     
             for rel in relations:
-                rel_id = f"{rel['from']}-{rel['to']}-{rel['label']}"
+                rel_id = f"{rel['from']}-{rel['to']}-{rel['label']}-{domain_id}"
                 try:
-                    c2.execute('INSERT OR IGNORE INTO relations (id, source, target, label) VALUES (?, ?, ?, ?)', (rel_id, rel['from'], rel['to'], rel['label']))
+                    c2.execute('INSERT OR IGNORE INTO relations (id, source, target, label, domain_id) VALUES (?, ?, ?, ?, ?)', (rel_id, rel['from'], rel['to'], rel['label'], domain_id))
                 except Exception:
                     pass
 
             conn2.commit()
             conn2.close()
 
-            if limit_hit:
-                reply += "\n\n[系统提示] 知识点存储已达上限，停止记录新节点。请升级版本。"
-
         except Exception as e:
             print(f"入库报错: {e}")
 
-        # 最后返回整理好的 entities 和 relations 供前端去渲染
         final_data = {
             "type": "done",
             "reply_final": reply,

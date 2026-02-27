@@ -4,353 +4,1350 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>知识递归学习引擎 (本地端)</title>
+    <title>递归学习引擎 | Recursive Knowledge Engine</title>
+    <!-- 引入 vis-network 库 -->
+    <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/easymde/dist/easymde.min.css">
+    <script src="https://unpkg.com/easymde/dist/easymde.min.js"></script>
+    <!-- 引入 Google Fonts -->
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&family=Inter:wght@300;400;600&display=swap"
+        rel="stylesheet">
     <style>
         :root {
-            --primary: #007bff;
-            --primary-hover: #0056b3;
-            --disabled: #ccc;
-            --warning: #ffc107;
-            --danger: #dc3545;
-            --success: #28a745;
-            --bg: #f4f6f9;
-            --text: #333;
-            --card-bg: #fff;
+            --primary: #6366f1;
+            --primary-glow: rgba(99, 102, 241, 0.5);
+            --bg-dark: #0f172a;
+            --sidebar-bg: rgba(30, 41, 59, 0.7);
+            --card-bg: rgba(30, 41, 59, 0.5);
+            --text-main: #f1f5f9;
+            --text-muted: #94a3b8;
+            --border: rgba(255, 255, 255, 0.1);
+            --glass-bg: rgba(255, 255, 255, 0.03);
+            --ai-bubble: rgba(51, 65, 85, 0.8);
+            --user-bubble: #6366f1;
+        }
+
+        * {
+            box-sizing: border-box;
+            transition: all 0.2s ease;
         }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: var(--bg);
-            color: var(--text);
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text-main);
             margin: 0;
-            padding: 20px;
+            padding: 0;
+            height: 100vh;
             display: flex;
-            justify-content: center;
+            overflow: hidden;
         }
 
-        .container {
-            max-width: 800px;
+        h1,
+        h2,
+        h3 {
+            font-family: 'Outfit', sans-serif;
+            margin: 0;
+        }
+
+        /* ==========================================
+           1. 登录前界面 (Hero Section)
+           ========================================== */
+        .hero-container {
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%);
+            text-align: center;
+            padding: 20px;
+        }
+
+        .hero-card {
+            background: var(--sidebar-bg);
+            backdrop-filter: blur(20px);
+            padding: 40px;
+            border-radius: 24px;
+            border: 1px solid var(--border);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            max-width: 450px;
             width: 100%;
         }
 
-        .header {
-            text-align: center;
-            margin-bottom: 20px;
-            background: var(--card-bg);
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        .hero-title {
+            font-size: 2.5rem;
+            font-weight: 600;
+            margin-bottom: 10px;
+            background: linear-gradient(to right, #818cf8, #c084fc);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
         }
 
-        .card {
-            background: var(--card-bg);
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 20px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        .hero-subtitle {
+            color: var(--text-muted);
+            margin-bottom: 30px;
+        }
+
+        .auth-input {
+            width: 100%;
+            padding: 14px 20px;
+            margin-bottom: 15px;
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            color: white;
+            font-size: 16px;
+            outline: none;
+        }
+
+        .auth-input:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 2px var(--primary-glow);
         }
 
         .btn {
-            padding: 10px 20px;
+            padding: 12px 24px;
+            border-radius: 12px;
             border: none;
-            border-radius: 6px;
             cursor: pointer;
-            background-color: var(--primary);
+            font-weight: 600;
+            font-size: 15px;
+        }
+
+        .btn-primary {
+            background: var(--primary);
             color: white;
-            font-size: 14px;
-            transition: background 0.3s;
+            width: 100%;
+            margin-top: 10px;
         }
 
-        .btn:hover:not(.disabled) {
-            background-color: var(--primary-hover);
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px var(--primary-glow);
         }
 
-        .btn-success {
-            background-color: var(--success);
+        /* ==========================================
+           2. 登录后布局
+           ========================================== */
+        .app-container {
+            display: flex;
+            width: 100%;
+            height: 100vh;
         }
 
-        .btn-success:hover {
-            background-color: #218838;
+        /* 侧边栏 */
+        .sidebar {
+            width: 320px;
+            background: var(--sidebar-bg);
+            backdrop-filter: blur(15px);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            padding: 24px;
+            z-index: 100;
         }
 
-        .btn-warning {
-            background-color: var(--warning);
-            color: #212529;
+        .sidebar-header {
+            margin-bottom: 30px;
         }
 
-        .btn-warning:hover {
-            background-color: #e0a800;
-        }
-
-        .btn-danger {
-            background-color: var(--danger);
-        }
-
-        .btn-danger:hover {
-            background-color: #c82333;
-        }
-
-        .disabled {
-            background: var(--disabled) !important;
-            cursor: not-allowed;
-            color: #666 !important;
-        }
-
-        .tip {
-            color: var(--danger);
-            font-size: 13px;
-            margin-top: 8px;
-        }
-
-        input[type="text"],
-        input[type="password"] {
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 6px;
-            width: 200px;
-            margin-right: 10px;
+        .user-profile {
+            display: flex;
+            align-items: center;
+            gap: 12px;
             margin-bottom: 10px;
         }
 
-        .status-badge {
-            display: inline-block;
-            padding: 4px 8px;
-            border-radius: 12px;
-            background: #e9ecef;
-            font-size: 12px;
+        .avatar {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(45deg, var(--primary), #a855f7);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
             font-weight: bold;
-            margin-left: 10px;
         }
 
-        .status-badge.free {
-            background: #6c757d;
-            color: white;
+        .plan-badge {
+            font-size: 10px;
+            padding: 2px 8px;
+            border-radius: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
 
-        .status-badge.basic {
-            background: #17a2b8;
-            color: white;
+        .stat-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 30px;
         }
 
-        .status-badge.pro {
-            background: #28a745;
-            color: white;
-        }
-
-        /* Toast */
-        #toast {
-            visibility: hidden;
-            min-width: 250px;
-            background-color: #333;
-            color: #fff;
+        .stat-card {
+            background: var(--glass-bg);
+            padding: 12px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
             text-align: center;
+        }
+
+        .stat-value {
+            font-size: 1.2rem;
+            font-weight: 600;
+            display: block;
+        }
+
+        .stat-label {
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        .nav-section {
+            margin-bottom: 30px;
+        }
+
+        .nav-label {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            margin-bottom: 12px;
+            display: block;
+        }
+
+        .tool-card {
+            background: var(--glass-bg);
+            border-radius: 12px;
+            padding: 15px;
+            border: 1px solid var(--border);
+            margin-bottom: 10px;
+        }
+
+        .tool-card input {
+            width: 100%;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px 12px;
+            color: white;
+            font-size: 13px;
+            margin-bottom: 8px;
+        }
+
+        /* 主区域 */
+        .main-content {
+            flex: 1;
+            display: flex;
+            position: relative;
+        }
+
+        /* 知识图谱 */
+        .graph-container {
+            flex: 1;
+            position: relative;
+            background: radial-gradient(circle at center, #1a1f35 0%, #0f172a 100%);
+        }
+
+        #mynetwork {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* 对话面板 */
+        .chat-panel {
+            width: 450px;
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(25px);
+            border-left: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            box-shadow: -10px 0 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .chat-header {
+            padding: 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .chat-history {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            scroll-behavior: smooth;
+        }
+
+        .message {
+            margin-bottom: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .message.user {
+            align-items: flex-end;
+        }
+
+        .message.ai {
+            align-items: flex-start;
+        }
+
+        .bubble {
+            max-width: 90%;
+            padding: 12px 18px;
+            border-radius: 18px;
+            font-size: 14px;
+            line-height: 1.6;
+            word-wrap: break-word;
+        }
+
+        .message.user .bubble {
+            background: var(--user-bubble);
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+
+        .message.ai .bubble {
+            background: var(--ai-bubble);
+            border: 1px solid var(--border);
+            border-bottom-left-radius: 4px;
+            white-space: pre-wrap;
+        }
+
+        .input-area {
+            padding: 20px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            gap: 10px;
+        }
+
+        .chat-input {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 12px 16px;
+            color: white;
+            outline: none;
+        }
+
+        .chat-input:focus {
+            border-color: var(--primary);
+        }
+
+        .send-btn {
+            background: var(--primary);
+            border: none;
+            border-radius: 12px;
+            width: 45px;
+            height: 45px;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+        }
+
+        /* 专业名词高亮 */
+        .term-highlight {
+            font-weight: 600;
+            text-decoration: underline;
+            color: #818cf8;
+            cursor: pointer;
+            padding: 0 2px;
             border-radius: 4px;
-            padding: 16px;
+        }
+
+        .term-highlight:hover {
+            background: rgba(129, 140, 248, 0.2);
+        }
+
+        /* Notes Panel & Resizer */
+        .resizer {
+            width: 6px;
+            background: rgba(255, 255, 255, 0.02);
+            cursor: col-resize;
+            transition: background 0.2s;
+            z-index: 10;
+        }
+
+        .resizer:hover,
+        .resizer.dragging {
+            background: var(--primary-glow);
+        }
+
+        .notes-panel {
+            width: 350px;
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(25px);
+            border-left: 1px solid var(--border);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            box-shadow: -5px 0 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .notes-header {
+            padding: 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .save-btn {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .save-btn:hover {
+            opacity: 0.9;
+        }
+
+        .notes-content {
+            flex: 1;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            background: transparent;
+        }
+
+        /* 覆盖 EasyMDE 以支持 Flex 收缩与展开 并且适配暗色主题 */
+        .notes-content .EasyMDEContainer {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            width: 100%;
+        }
+
+        .notes-content .CodeMirror {
+            flex: 1;
+            overflow-y: auto;
+            border-bottom-left-radius: 8px;
+            border-bottom-right-radius: 8px;
+            background: rgba(0, 0, 0, 0.2);
+            color: var(--text-main);
+            border-color: var(--border);
+        }
+
+        .notes-content .editor-toolbar {
+            border-top-left-radius: 8px;
+            border-top-right-radius: 8px;
+            border-color: var(--border);
+            background: rgba(255, 255, 255, 0.05);
+            opacity: 1;
+        }
+
+        .notes-content .editor-toolbar>button {
+            color: var(--text-muted) !important;
+        }
+
+        .notes-content .editor-toolbar>button.active,
+        .notes-content .editor-toolbar>button:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-main) !important;
+            border-color: transparent;
+        }
+
+        .notes-content .editor-preview {
+            background: var(--bg-dark);
+            color: var(--text-main);
+        }
+
+        .notes-content .CodeMirror-cursor {
+            border-left: 1px solid var(--text-main);
+        }
+
+        /* Toast & Animations */
+        #toast {
             position: fixed;
-            z-index: 1000;
+            bottom: 20px;
             left: 50%;
-            bottom: 30px;
             transform: translateX(-50%);
+            padding: 12px 24px;
+            border-radius: 10px;
+            background: #333;
+            color: white;
+            z-index: 1000;
+            opacity: 0;
+            pointer-events: none;
         }
 
         #toast.show {
-            visibility: visible;
-            -webkit-animation: fadein 0.5s, fadeout 0.5s 2.5s;
-            animation: fadein 0.5s, fadeout 0.5s 2.5s;
+            opacity: 1;
+            bottom: 40px;
         }
 
-        @keyframes fadein {
-            from {
-                bottom: 0;
-                opacity: 0;
-            }
-
-            to {
-                bottom: 30px;
-                opacity: 1;
-            }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
         }
 
-        .hidden {
-            display: None !important;
+        /* 图例与指南样式 */
+        .graph-legend {
+            position: absolute;
+            bottom: 24px;
+            left: 24px;
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 20px;
+            z-index: 10;
+            user-select: none;
+            max-width: 280px;
         }
 
-        .auth-box {
+        .legend-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-main);
+            margin-bottom: 15px;
+            display: block;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .legend-item {
             display: flex;
-            flex-direction: column;
             align-items: center;
+            gap: 12px;
+            margin-bottom: 10px;
+            font-size: 13px;
+        }
+
+        .legend-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .legend-desc {
+            color: var(--text-muted);
+            line-height: 1.4;
+        }
+
+        .legend-divider {
+            height: 1px;
+            background: var(--border);
+            margin: 15px 0;
+        }
+
+        .guide-item {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+            display: flex;
+            gap: 8px;
+        }
+
+        .guide-key {
+            color: var(--primary);
+            font-weight: 600;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .icon-spin {
+            animation: spin 1s linear infinite;
         }
     </style>
 </head>
 
 <body>
-    <div class="container">
-        <!-- 未登录视图 -->
-        {% if not user %}
-        <div class="header" id="loginView">
-            <h1>知识递归学习引擎</h1>
-            <p>云端鉴权 + 本地执行</p>
-            <div class="auth-box">
-                <input type="text" id="username" placeholder="请输入用户名">
-                <input type="password" id="password" placeholder="请输入密码">
-                <div style="margin-top: 10px;">
-                    <button class="btn" onclick="login()">登录</button>
-                    <button class="btn btn-warning" onclick="register()">注册</button>
+
+    <body>
+        <div class="app-container">
+            <!-- 侧边栏 -->
+            <aside class="sidebar">
+                <h2 style="font-size: 1.5rem; margin-bottom: 20px; text-align: center; color: var(--primary);">Knowledge
+                    Engine</h2>
+
+                <div class="nav-section">
+                    <span class="nav-label">大模型配置 (OpenAI Format)</span>
+                    <div class="tool-card">
+                        <input type="password" id="apiKey" placeholder="API Key (必填)" autocomplete="off">
+                        <input type="text" id="baseUrl" placeholder="Base URL (选填, 默认官方)">
+                        <input type="text" id="modelName" placeholder="Model (选填, 默认 gpt-3.5-turbo)">
+                    </div>
                 </div>
-            </div>
+
+                <div class="stat-grid">
+                    <div class="stat-card">
+                        <span class="stat-value" id="termsCount">{{ counts.terms }}</span>
+                        <span class="stat-label">知识节点</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-value" id="domainsCount">{{ counts.domains }}</span>
+                        <span class="stat-label">学习领域</span>
+                    </div>
+                </div>
+
+                <div class="nav-section">
+                    <span class="nav-label">当前领域管理</span>
+                    <div class="tool-card">
+                        <select id="domainSelector"
+                            style="width: 100%; background: rgba(0, 0, 0, 0.2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; color: white; margin-bottom: 8px; font-size: 13px;"
+                            onchange="switchDomain(this.value)">
+                            {% for domain in all_domains %}
+                            <option value="{{ domain.id }}" {% if domain.id==current_domain_id %}selected{% endif %}>{{
+                                domain.name }}</option>
+                            {% endfor %}
+                        </select>
+                        <input type="text" id="domainName" placeholder="新领域名称...">
+                        <button class="btn btn-primary" style="font-size: 12px; padding: 6px;"
+                            onclick="createDomain()">创建领域</button>
+                    </div>
+                </div>
+
+                <div class="nav-section">
+                    <span class="nav-label">AI 工具</span>
+                    <button id="genQuizBtn" class="btn"
+                        style="width: 100%; background: var(--glass-bg); color: var(--text-main); font-size: 13px; margin-bottom: 8px; border: 1px solid var(--border); display: flex; align-items: center; justify-content: center;"
+                        onclick="genQuiz()">生成递归题目</button>
+                    <div id="quizShort"
+                        style="font-size: 12px; color: var(--text-muted); padding: 5px; max-height: 100px; overflow: hidden;">
+                    </div>
+                </div>
+
+                <div style="flex: 1;"></div>
+
+                <div class="nav-section">
+                    <span class="nav-label">图谱视图控制</span>
+                    <button class="btn"
+                        style="width: 100%; background: var(--glass-bg); color: #cbd5e1; font-size: 13px; margin-bottom: 8px; border: 1px solid var(--border);"
+                        onclick="resetToFramework()">框架视图 (重置)</button>
+                    <button class="btn"
+                        style="width: 100%; background: rgba(244, 63, 94, 0.15); color: #f43f5e; font-size: 13px; margin-bottom: 8px; border: 1px solid rgba(244, 63, 94, 0.3);"
+                        onclick="simulateWeakness()">分析薄弱点闭环</button>
+                </div>
+
+                <div class="nav-section">
+                    <button class="btn"
+                        style="width: 100%; background: var(--glass-bg); color: #cbd5e1; font-size: 13px; margin-bottom: 8px; border: 1px solid var(--border);"
+                        onclick="resetToFramework()">图谱视角回归</button>
+                </div>
+            </aside>
+
+            <!-- 主内容区 -->
+            <main class="main-content">
+                <!-- 知识图谱 (占据背景) -->
+                <div class="graph-container" id="graphPane">
+                    <div id="mynetwork"></div>
+
+                    <!-- 图例与交互指南 -->
+                    <div class="graph-legend">
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                            <span class="legend-title" style="margin-bottom: 0;">图谱图例</span>
+                            <span id="legendToggle" onclick="toggleLegend()"
+                                style="cursor: pointer; font-size: 16px; font-weight: bold; color: var(--text-muted);">&minus;</span>
+                        </div>
+                        <div id="legendContent">
+                            <div class="legend-item">
+                                <div class="legend-dot" style="background: #ef4444; border: 2px solid #b91c1c;"></div>
+                                <div class="legend-desc">核心概念<br><small>学习的主题骨架</small></div>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-dot" style="background: #10b981; border: 2px solid #047857;"></div>
+                                <div class="legend-desc">关键维度<br><small>一级分支，可点击展开</small></div>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-dot" style="background: #64748b; border: 2px solid #475569;"></div>
+                                <div class="legend-desc">细节补充<br><small>二级内容，按需探究</small></div>
+                            </div>
+
+                            <div class="legend-divider"></div>
+
+                            <span class="legend-title">交互指南</span>
+                            <div class="guide-item">
+                                <span class="guide-key">左键点击:</span>
+                                <span>选中节点并高亮关联路径</span>
+                            </div>
+                            <div class="guide-item">
+                                <span class="guide-key">双击/点击主干:</span>
+                                <span>展开或折叠该维度的细节</span>
+                            </div>
+                            <div class="guide-item">
+                                <span class="guide-key">滚轮/捏合:</span>
+                                <span>缩放图谱画布</span>
+                            </div>
+                            <div class="guide-item">
+                                <span class="guide-key">点击空白:</span>
+                                <span>重置视图视角</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 拖拽条 1 -->
+                <div class="resizer" id="resizerLeft"></div>
+
+                <!-- 笔记面板 -->
+                <div class="notes-panel" id="notesPane">
+                    <div class="notes-header">
+                        <h3 style="font-size: 14px; font-weight: 600;" id="notesTitle">笔记: [未选择节点]</h3>
+                        <div>
+                            <span id="saveStatus"
+                                style="font-size: 12px; color: #10b981; margin-right: 10px; display: none;">已保存</span>
+                            <button class="save-btn" onclick="saveNotes()">保存</button>
+                        </div>
+                    </div>
+                    <div class="notes-content">
+                        <textarea id="notesEditor"></textarea>
+                    </div>
+                </div>
+
+                <!-- 拖拽条 2 -->
+                <div class="resizer" id="resizerRight"></div>
+
+                <!-- 对话面板 (悬浮或靠右) -->
+                <div class="chat-panel" id="chatPane">
+                    <div class="chat-header">
+                        <h3 style="font-size: 16px;">AI 导师</h3>
+                        <button onclick="clearContext()"
+                            style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 12px;">清空对话</button>
+                    </div>
+                    <div class="chat-history" id="chatHistory">
+                        <!-- 动态加载 -->
+                    </div>
+                    <div class="input-area">
+                        <input type="text" id="userInput" class="chat-input" placeholder="输入知识点开始递归学习..."
+                            autocomplete="off">
+                        <button id="sendBtn" class="send-btn" onclick="sendMessage()">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </main>
         </div>
-        {% else %}
-        <!-- 已登录视图 -->
-        <div id="mainView">
-            <div class="header">
-                <h1>知识递归学习引擎</h1>
-                <p>欢迎回来，{{ user.username }}！当前版本:
-                    <span class="status-badge {{ user.plan.name }}">{{ user.plan.name.upper() }}</span>
-                    <button class="btn btn-danger" style="padding: 4px 10px; font-size: 12px; margin-left:10px;"
-                        onclick="logout()">退出</button>
-                </p>
-                <div style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 15px;">
-                    <input type="text" id="redeemCode" placeholder="输入升级解锁码" style="margin:0; width:150px;">
-                    <button class="btn btn-warning" onclick="redeemKey()">卡密升级</button>
-                    <button class="btn btn-success" onclick="backupCloud()">备份至云端</button>
-                </div>
-            </div>
 
-            <!-- 控制面板：同前，但限制逻辑在后端 -->
-            <div class="card">
-                <h3>1. 创建知识领域</h3>
-                <p style="font-size: 13px; color: #666;">已创建领域：<span id="domainsCount">{{ counts.domains }}</span> / {%
-                    if user.plan.max_domains == -1 %}无限{% else %}{{ user.plan.max_domains }}{% endif %}</p>
-                <div style="display: flex; align-items: center; margin-top: 15px;">
-                    <input type="text" id="domainName" placeholder="输入领域名称">
-                    <button id="createDomainBtn" class="btn" onclick="createDomain()">创建领域</button>
-                </div>
-            </div>
+        <div id="toast"></div>
 
-            <div class="card">
-                <h3>2. AI 递归出题</h3>
-                <p style="font-size: 13px; color: #666;">今日已出题：<span id="quizzesCount">{{ counts.today_quizzes }}</span>
-                    / {% if user.plan.quiz_daily_limit == -1 %}无限{% else %}{{ user.plan.quiz_daily_limit }}{% endif %}
-                </p>
-                <div style="margin-top: 15px;">
-                    <button id="quizBtn" class="btn" onclick="genQuiz()">AI 自动出题</button>
-                </div>
-                <div id="quizResult"
-                    style="margin-top: 15px; padding: 15px; background: #f8f9fa; border-radius: 6px; display: none; white-space: pre-wrap; font-size: 14px;">
-                </div>
-            </div>
-
-            <div class="card" style="text-align: center;">
-                <h3>3. 沉浸式知识网络学习</h3>
-                <p style="font-size: 13px; color: #666;">与AI对话，自动抽取专业术语生成本地私有知识图谱，本地执行不上传数据</p>
-                <p style="font-size: 13px; color: #666;">当前图谱节点数：{{ counts.terms }} / {% if user.plan.max_terms == -1
-                    %}无限{% else %}{{ user.plan.max_terms }}{% endif %}</p>
-                <div style="margin-top: 15px;">
-                    <button class="btn btn-success" style="width: 200px; padding: 12px; font-size: 16px;"
-                        onclick="window.location.href='/chat'">进入学习对话</button>
-                </div>
-            </div>
-        </div>
-        {% endif %}
-    </div>
-
-    <div id="toast"></div>
-
-    <script>
-        function showToast(msg, isError = false) {
-            const toast = document.getElementById("toast");
-            toast.innerText = msg;
-            toast.style.backgroundColor = isError ? "#dc3545" : "#28a745";
-            toast.className = "show";
-            setTimeout(() => { toast.className = toast.className.replace("show", ""); }, 3000);
-        }
-
-        async function login() {
-            const u = document.getElementById('username').value;
-            const p = document.getElementById('password').value;
-            if (!u || !p) return showToast('请输入账号和密码', true);
-
-            const res = await fetch('/api/auth/login', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username: u, password: p })
-            });
-            const data = await res.json();
-            if (data.code === 0) {
-                showToast('登录成功，正在刷新...');
-                setTimeout(() => location.reload(), 1000);
-            } else {
-                showToast(data.msg, true);
+        <script>
+            // ==========================================
+            // 1. 通用辅助函数
+            // ==========================================
+            function showToast(msg, isError = false) {
+                const toast = document.getElementById("toast");
+                toast.innerText = msg;
+                toast.style.background = isError ? "#ef4444" : "#10b981";
+                toast.className = "show";
+                setTimeout(() => { toast.className = ""; }, 3000);
             }
-        }
 
-        async function register() {
-            const u = document.getElementById('username').value;
-            const p = document.getElementById('password').value;
-            if (!u || !p) return showToast('请输入完整', true);
+            // ==========================================
+            // 2. 本地设置加载与存储
+            // ==========================================
+            const apiNode = document.getElementById("apiKey");
+            const baseNode = document.getElementById("baseUrl");
+            const modelNode = document.getElementById("modelName");
 
-            const res = await fetch('/api/auth/register', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username: u, password: p })
-            });
-            const data = await res.json();
-            showToast(data.msg, data.code !== 0);
-        }
+            // 从 localStorage 恢复配置
+            if (localStorage.getItem("apiKey")) apiNode.value = localStorage.getItem("apiKey");
+            if (localStorage.getItem("baseUrl")) baseNode.value = localStorage.getItem("baseUrl");
+            if (localStorage.getItem("modelName")) modelNode.value = localStorage.getItem("modelName");
 
-        async function logout() {
-            await fetch('/api/auth/logout', { method: 'POST' });
-            location.reload();
-        }
-
-        async function redeemKey() {
-            const code = document.getElementById('redeemCode').value;
-            if (!code) return showToast('请输入卡密', true);
-
-            const res = await fetch('/api/auth/redeem', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ key_code: code })
-            });
-            const data = await res.json();
-            if (data.code === 0) {
-                showToast(data.msg);
-                setTimeout(() => location.reload(), 1500);
-            } else {
-                showToast(data.msg, true);
+            function saveConfig() {
+                localStorage.setItem("apiKey", apiNode.value.trim());
+                localStorage.setItem("baseUrl", baseNode.value.trim());
+                localStorage.setItem("modelName", modelNode.value.trim());
             }
-        }
 
-        async function backupCloud() {
-            showToast("正在打包本地数据并备份至云端...");
-            const res = await fetch('/api/backup/upload', { method: 'POST' });
-            const data = await res.json();
-            showToast(data.msg, data.code !== 0);
-        }
+            apiNode.addEventListener("change", saveConfig);
+            baseNode.addEventListener("change", saveConfig);
+            modelNode.addEventListener("change", saveConfig);
 
-        async function createDomain() {
-            const name = document.getElementById("domainName").value;
-            const res = await fetch("/api/domain/create", {
-                method: "POST", headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name || '新领域' })
+            // ==========================================
+            // 3. 页面功能交互
+            // ==========================================
+            const currentDomainId = {{ current_domain_id|default ('null') }};
+
+            async function createDomain() {
+                const name = document.getElementById("domainName").value;
+                const res = await fetch("/api/domain/create", {
+                    method: "POST", headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name || '新领域' })
+                });
+                const data = await res.json();
+                if (data.code === 0) {
+                    showToast("领域创建成功");
+                    document.getElementById('domainsCount').innerText = parseInt(document.getElementById('domainsCount').innerText) + 1;
+                    window.location.href = "/?domain_id=" + data.domain_id;
+                } else showToast(data.msg, true);
+            }
+
+            function switchDomain(domainId) {
+                window.location.href = "/?domain_id=" + domainId;
+            }
+
+            async function genQuiz() {
+                if (!weaknessNodeId) {
+                    showToast("请先点击“分析薄弱点闭环”发掘薄弱节点！", true);
+                    return;
+                }
+                if (focusedNode !== weaknessNodeId) {
+                    showToast("请先在图谱中点击选中的薄弱节点，再进行出题！", true);
+                    return;
+                }
+
+                const btn = document.getElementById('genQuizBtn');
+                const originalText = btn.innerHTML;
+                const originalBackground = btn.style.background;
+                btn.disabled = true;
+
+                let progress = 0;
+                btn.innerHTML = `正在生成 (${progress}%)...`;
+                btn.style.background = `linear-gradient(to right, var(--primary) ${progress}%, var(--glass-bg) ${progress}%)`;
+
+                const progressInterval = setInterval(() => {
+                    if (progress < 95) {
+                        progress += Math.floor(Math.random() * 8) + 1;
+                        if (progress > 95) progress = 95;
+                        btn.innerHTML = `正在生成 (${progress}%)...`;
+                        btn.style.background = `linear-gradient(to right, var(--primary) ${progress}%, var(--glass-bg) ${progress}%)`;
+                    }
+                }, 200);
+
+                try {
+                    const node = nodes.get(focusedNode);
+                    const payload = {
+                        node_id: node.id,
+                        node_label: node.label,
+                        domain_id: currentDomainId,
+                        api_key: document.getElementById('apiKey').value.trim(),
+                        base_url: document.getElementById('baseUrl').value.trim(),
+                        model: document.getElementById('modelName').value.trim()
+                    };
+
+                    const res = await fetch("/api/quiz/generate", {
+                        method: "POST",
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    const data = await res.json();
+                    if (data.code === 0) {
+                        showToast("AI 已生成递归题目");
+                        if (easyMDE && currentEditingNodeId === focusedNode) {
+                            const currentNotes = easyMDE.value();
+                            const newNotes = currentNotes + "\n\n### AI 自动生成复习题\n" + data.quiz;
+                            easyMDE.value(newNotes);
+                            saveNotes();
+                        }
+                    } else {
+                        showToast(data.msg, true);
+                    }
+                } catch (e) {
+                    showToast("请求失败，请检查网络", true);
+                } finally {
+                    clearInterval(progressInterval);
+                    btn.innerHTML = `正在生成 (100%)...`;
+                    btn.style.background = `linear-gradient(to right, var(--primary) 100%, var(--glass-bg) 100%)`;
+                    setTimeout(() => {
+                        btn.innerHTML = originalText;
+                        btn.style.background = originalBackground;
+                        btn.disabled = false;
+                    }, 800);
+                }
+            }
+
+            function toggleLegend() {
+                const content = document.getElementById('legendContent');
+                const toggle = document.getElementById('legendToggle');
+                if (content.style.display === 'none') {
+                    content.style.display = 'block';
+                    toggle.innerHTML = '&minus;';
+                } else {
+                    content.style.display = 'none';
+                    toggle.innerHTML = '&plus;';
+                }
+            }
+
+            async function clearContext() {
+                if (confirm("确定清空对话上下文吗？知识图谱将保留。")) {
+                    await fetch('/api/chat/clear', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ domain_id: currentDomainId })
+                    });
+                    document.getElementById('chatHistory').innerHTML = '';
+                    showToast("上下文已清空");
+                }
+            }
+
+            // ==========================================
+            // 4. 知识图谱引擎 (Vis.js)
+            // ==========================================
+            const initNodesWithState = {{ initial_nodes | tojson | safe }}.map(n => ({
+                ...n,
+                hidden: n.group === 'detail' // 默认隐藏细节
+            }));
+            const nodes = new vis.DataSet(initNodesWithState);
+            const edges = new vis.DataSet({{ initial_edges | tojson | safe }});
+            const chatHistoryData = {{ chat_history | tojson | safe }};
+
+            const container = document.getElementById('mynetwork');
+            const networkData = { nodes, edges };
+
+            const groupColors = {
+                core: { background: '#ef4444', border: '#b91c1c' }, // 红 - 核心概念
+                primary: { background: '#10b981', border: '#047857' }, // 绿 - 一级主干
+                detail: { background: '#64748b', border: '#475569' } // 灰 - 补充细节
+            };
+
+            const networkOptions = {
+                nodes: {
+                    shadow: true,
+                    borderWidth: 2
+                },
+                groups: {
+                    core: { shape: 'dot', size: 35, color: groupColors.core, font: { size: 18, color: '#ffffff', bold: true } },
+                    primary: { shape: 'dot', size: 22, color: groupColors.primary, font: { size: 14, color: '#f1f5f9' } },
+                    detail: { shape: 'dot', size: 12, color: groupColors.detail, font: { size: 10, color: '#cbd5e1' } }
+                },
+                edges: {
+                    width: 1, color: { color: 'rgba(255,255,255,0.2)', highlight: '#818cf8' },
+                    arrows: { to: { enabled: true, scaleFactor: 0.5 } },
+                    smooth: { type: 'continuous' }
+                },
+                physics: {
+                    forceAtlas2Based: { gravitationalConstant: -40, centralGravity: 0.01, springLength: 120 },
+                    solver: 'forceAtlas2Based', stabilization: { iterations: 100 }
+                }
+            };
+            const network = new vis.Network(container, networkData, networkOptions);
+
+            let focusedNode = null;
+            let weaknessNodeId = null;
+
+            function syncEdgesVisibility() {
+                const updates = [];
+                edges.get().forEach(edge => {
+                    const n1 = nodes.get(edge.from);
+                    const n2 = nodes.get(edge.to);
+                    if (n1 && n2) {
+                        const hideEdge = n1.hidden || n2.hidden;
+                        // 核心边加粗
+                        const isCore = (n1.group === 'core' || n2.group === 'core');
+                        if (edge.hidden !== hideEdge) updates.push({ id: edge.id, hidden: hideEdge, width: isCore ? 3 : 1 });
+                    }
+                });
+                if (updates.length > 0) edges.update(updates);
+            }
+
+            syncEdgesVisibility();
+
+            // Initialize EasyMDE for notes
+            let easyMDE = null;
+            let currentEditingNodeId = null;
+
+            function initNotes() {
+                const notesEditorEle = document.getElementById('notesEditor');
+                if (notesEditorEle && !easyMDE) {
+                    easyMDE = new EasyMDE({
+                        element: notesEditorEle,
+                        spellChecker: false,
+                        status: false,
+                        autofocus: false,
+                        maxHeight: "100%",
+                        toolbar: ["bold", "italic", "heading", "|", "quote", "unordered-list", "ordered-list", "|", "link", "image", "|", "preview"]
+                    });
+                    easyMDE.value('请点击左侧节点查看并编辑笔记...');
+                }
+            }
+            initNotes();
+
+            async function openNotes(nodeId, label) {
+                currentEditingNodeId = nodeId;
+                document.getElementById('notesTitle').innerText = `笔记: [${label}]`;
+
+                if (easyMDE) {
+                    easyMDE.value('正在加载笔记...');
+                    try {
+                        const res = await fetch(`/api/notes/${nodeId}?domain_id=${currentDomainId}`);
+                        const data = await res.json();
+                        if (data.code === 0) {
+                            easyMDE.value(data.notes || '');
+                        } else {
+                            easyMDE.value('加载失败: ' + data.msg);
+                        }
+                    } catch (err) {
+                        console.error(err);
+                        easyMDE.value('网络错误，加载失败。');
+                    }
+                }
+            }
+
+            async function saveNotes() {
+                if (!currentEditingNodeId) {
+                    showToast("未选择节点，无法保存", true);
+                    return;
+                }
+                const notes = easyMDE.value();
+                const saveStatus = document.getElementById('saveStatus');
+                saveStatus.innerText = '正在保存...';
+                saveStatus.style.display = 'inline';
+                saveStatus.style.color = '#10b981';
+
+                try {
+                    const res = await fetch(`/api/notes/${currentEditingNodeId}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ notes: notes, domain_id: currentDomainId })
+                    });
+                    const data = await res.json();
+                    if (data.code === 0) {
+                        saveStatus.innerText = '已保存';
+                        setTimeout(() => {
+                            if (saveStatus.innerText === '已保存') {
+                                saveStatus.style.display = 'none';
+                            }
+                        }, 2000);
+                    } else {
+                        saveStatus.innerText = '保存失败';
+                        saveStatus.style.color = '#ef4444';
+                    }
+                } catch (err) {
+                    console.error(err);
+                    saveStatus.innerText = '网络错误';
+                    saveStatus.style.color = '#ef4444';
+                }
+            }
+
+            network.on("click", function (params) {
+                if (params.nodes.length > 0) {
+                    const nodeId = params.nodes[0];
+                    const node = nodes.get(nodeId);
+                    focusedNode = nodeId;
+
+                    // 打开笔记
+                    openNotes(nodeId, node.label);
+
+                    // 第一层：点击一级主干，展示子阶段细节 (展开深挖)
+                    if (node.group === 'primary') {
+                        const connected = network.getConnectedNodes(nodeId);
+                        const nUpdates = [];
+                        connected.forEach(cid => {
+                            const cNode = nodes.get(cid);
+                            if (cNode && cNode.group === 'detail') {
+                                nUpdates.push({ id: cid, hidden: !cNode.hidden }); // 切换显隐
+                            }
+                        });
+                        if (nUpdates.length > 0) nodes.update(nUpdates);
+                        syncEdgesVisibility();
+                    }
+
+                    // 关联高亮
+                    applyHighlight(nodeId);
+
+                    // 便捷操作
+                    if (node.group === 'detail') {
+                        document.getElementById('userInput').value = `请详细解释细节参数：${node.label}`;
+                    } else if (node.group === 'primary') {
+                        document.getElementById('userInput').value = `请深入分析维度：${node.label}`;
+                    } else {
+                        document.getElementById('userInput').value = `什么是核心概念：${node.label}`;
+                    }
+                } else {
+                    focusedNode = null;
+                    resetToFramework();
+                }
             });
-            const data = await res.json();
-            showToast(data.msg, data.code !== 0);
-            if (data.code === 0) {
-                document.getElementById('domainsCount').innerText = parseInt(document.getElementById('domainsCount').innerText) + 1;
-            }
-        }
 
-        async function genQuiz() {
-            const res = await fetch("/api/quiz/generate", { method: "POST" });
-            const data = await res.json();
-            if (data.code === 0) {
-                showToast(data.msg);
-                document.getElementById('quizzesCount').innerText = parseInt(document.getElementById('quizzesCount').innerText) + 1;
-                const resultDiv = document.getElementById("quizResult");
-                resultDiv.style.display = "block";
-                resultDiv.innerText = data.quiz;
-            } else {
-                showToast(data.msg, true);
+            function applyHighlight(centerNodeId) {
+                const connectedNodes = network.getConnectedNodes(centerNodeId);
+                connectedNodes.push(centerNodeId);
+
+                const nUpdates = [];
+                nodes.get().forEach(n => {
+                    if (n.hidden) return;
+                    const grp = n.group || 'detail';
+                    if (connectedNodes.includes(n.id)) {
+                        nUpdates.push({ id: n.id, color: undefined, font: { color: grp === 'detail' ? '#cbd5e1' : '#ffffff' } }); // 原色
+                    } else {
+                        nUpdates.push({ id: n.id, color: { background: 'rgba(50,50,50,0.4)', border: 'rgba(50,50,50,0.6)' }, font: { color: 'rgba(255,255,255,0.2)' } }); // 自动淡化
+                    }
+                });
+                nodes.update(nUpdates);
+
+                const eUpdates = [];
+                edges.get().forEach(e => {
+                    if (e.hidden) return;
+                    const isConn = e.from === centerNodeId || e.to === centerNodeId;
+                    eUpdates.push({ id: e.id, color: { opacity: isConn ? 1.0 : 0.05 } });
+                });
+                edges.update(eUpdates);
             }
-        }
-    </script>
-</body>
+
+            function highlightNode(nodeId) {
+                const node = nodes.get(nodeId);
+                if (node) {
+                    // 如果节点被隐藏了（例如是 detail 节点），先将其显示出来
+                    if (node.hidden) {
+                        nodes.update({ id: nodeId, hidden: false });
+                        syncEdgesVisibility();
+                    }
+                    network.selectNodes([nodeId]);
+                    const params = { nodes: [nodeId] };
+                    network.emit('click', params); // 触发关联高亮逻辑
+                    network.focus(nodeId, { scale: 1.2, animation: { duration: 1000 } });
+                }
+            }
+
+            function resetToFramework() {
+                const nUpdates = [];
+                nodes.get().forEach(n => {
+                    nUpdates.push({ id: n.id, hidden: n.group === 'detail', color: undefined, font: { color: (n.group || 'detail') === 'detail' ? '#cbd5e1' : '#ffffff' } });
+                });
+                nodes.update(nUpdates);
+
+                const eUpdates = [];
+                edges.get().forEach(e => {
+                    const n1 = nodes.get(e.from); const n2 = nodes.get(e.to);
+                    const isCore = (n1 && n1.group === 'core') || (n2 && n2.group === 'core');
+                    eUpdates.push({ id: e.id, color: { color: 'rgba(255,255,255,0.2)', opacity: 1.0 }, width: isCore ? 3 : 1 });
+                });
+                edges.update(eUpdates);
+
+                syncEdgesVisibility();
+                focusedNode = null;
+                network.unselectAll();
+                network.fit({ animation: true });
+            }
+
+            function simulateWeakness() {
+                const details = nodes.get({ filter: n => n.group === 'detail' });
+                if (details.length === 0) {
+                    showToast("暂未发掘到足够的细节节点，请先触发第一层主干并产生关联子节点进行学习。");
+                    return;
+                }
+                // 随机选取1个错题节点
+                const badNode = details[Math.floor(Math.random() * details.length)];
+                weaknessNodeId = badNode.id;
+
+                // 隐藏全部
+                const allNodesUpdates = nodes.get().map(n => ({ id: n.id, hidden: true, color: undefined }));
+                nodes.update(allNodesUpdates);
+
+                // 溯源路径：模拟依赖关系向上找 primary -> core
+                let pathIds = [badNode.id];
+                edges.get().forEach(e => {
+                    if (e.to === badNode.id || e.from === badNode.id) {
+                        const parentId = e.from === badNode.id ? e.to : e.from;
+                        const pNode = nodes.get(parentId);
+                        if (pNode && pNode.group === 'primary') {
+                            pathIds.push(parentId);
+                            edges.get().forEach(ce => {
+                                if (ce.to === parentId || ce.from === parentId) {
+                                    const coreId = ce.from === parentId ? ce.to : ce.from;
+                                    const cNode = nodes.get(coreId);
+                                    if (cNode && cNode.group === 'core') pathIds.push(coreId);
+                                }
+                            });
+                        }
+                    }
+                });
+
+                // 展现最短路径
+                const showUpdates = pathIds.map(id => {
+                    if (id === badNode.id) return { id, hidden: false, color: { background: '#f43f5e', border: '#be123c' } }; // 红高亮
+                    return { id, hidden: false, color: undefined };
+                });
+                nodes.update(showUpdates);
+                syncEdgesVisibility();
+
+                // 连线标红
+                edges.get().forEach(e => {
+                    if (!e.hidden) edges.update([{ id: e.id, color: { color: '#f43f5e', opacity: 1.0 }, width: 2 }]);
+                });
+
+                network.fit({ animation: true });
+                showToast(`[错题诊断闭环] 为您高亮薄弱点 "${badNode.label}" 及其底层依赖链路。`);
+            }
+
+            function updateGraph(newEntities, newRelations) {
+                newEntities.forEach(ent => {
+                    if (!nodes.get(ent.id)) nodes.add({ id: ent.id, label: ent.label, group: ent.group, hidden: ent.group === 'detail' });
+                });
+                newRelations.forEach(rel => {
+                    const id = `${rel.from}-${rel.to}-${rel.label}`;
+                    if (!edges.get(id)) {
+                        edges.add({ id, from: rel.from, to: rel.to, label: rel.label, hidden: true });
+                    }
+                });
+                syncEdgesVisibility();
+                document.getElementById('termsCount').innerText = nodes.length;
+                if (!focusedNode) {
+                    network.fit({ animation: true });
+                }
+            }
+
+            // ==========================================
+            // 5. 对话逻辑与高亮渲染
+            // ==========================================
+            const chatHistEl = document.getElementById('chatHistory');
+            const userInput = document.getElementById('userInput');
+
+            function renderWithHighlights(bubble, text, entities) {
+                if (!entities || entities.length === 0) { bubble.innerText = text; return; }
+                const sorted = [...entities].sort((a, b) => b.label.length - a.label.length);
+                let html = text;
+                const reps = [];
+                sorted.forEach((ent, i) => {
+                    const regex = new RegExp(ent.label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+                    if (regex.test(html)) {
+                        const placeholder = `__T${i}__`;
+                        html = html.replace(regex, placeholder);
+                        reps.push({ placeholder, html: `<span class="term-highlight" onclick="highlightNode('${ent.id}')">${ent.label}</span>` });
+                    }
+                });
+                reps.forEach(r => html = html.split(r.placeholder).join(r.html));
+                bubble.innerHTML = html;
+            }
+
+            function appendMessage(role, text, entities = null) {
+                const div = document.createElement('div');
+                div.className = `message ${role}`;
+                const bubble = document.createElement('div');
+                bubble.className = 'bubble';
+                if (role === 'ai') renderWithHighlights(bubble, text, entities || nodes.get());
+                else bubble.innerText = text;
+                div.appendChild(bubble);
+                chatHistEl.appendChild(div);
+                chatHistEl.scrollTop = chatHistEl.scrollHeight;
+                return bubble;
+            }
+
+            // 初始加载历史
+            chatHistoryData.forEach(msg => appendMessage(msg.role, msg.content));
+
+            // ==========================================
+            // 6. 拖拽调整宽度逻辑
+            // ==========================================
+            const graphPane = document.getElementById('graphPane');
+            const notesPane = document.getElementById('notesPane');
+            const chatPane = document.getElementById('chatPane');
+            const resizerLeft = document.getElementById('resizerLeft');
+            const resizerRight = document.getElementById('resizerRight');
+
+            let isResizing = false;
+            let activeResizer = null;
+
+            if (resizerLeft) {
+                resizerLeft.addEventListener('mousedown', (e) => {
+                    isResizing = true;
+                    activeResizer = 'left';
+                    document.body.style.cursor = 'col-resize';
+                    resizerLeft.classList.add('dragging');
+                });
+            }
+
+            if (resizerRight) {
+                resizerRight.addEventListener('mousedown', (e) => {
+                    isResizing = true;
+                    activeResizer = 'right';
+                    document.body.style.cursor = 'col-resize';
+                    resizerRight.classList.add('dragging');
+                });
+            }
+
+            document.addEventListener('mousemove', (e) => {
+                if (!isResizing) return;
+                const containerRect = document.querySelector('.main-content').getBoundingClientRect();
+                const mouseX = e.clientX - containerRect.left;
+
+                if (activeResizer === 'left') {
+                    const newWidth = Math.max(200, mouseX);
+                    graphPane.style.flex = `0 0 ${newWidth}px`;
+                } else if (activeResizer === 'right') {
+                    const graphAndResizersWidth = resizerLeft.getBoundingClientRect().right - containerRect.left;
+                    const newNotesWidth = Math.max(200, mouseX - graphAndResizersWidth);
+                    if (notesPane) notesPane.style.width = `${newNotesWidth}px`;
+                }
+            });
+
+            document.addEventListener('mouseup', () => {
+                if (isResizing) {
+                    isResizing = false;
+                    document.body.style.cursor = 'default';
+                    if (resizerLeft) resizerLeft.classList.remove('dragging');
+                    if (resizerRight) resizerRight.classList.remove('dragging');
+                    if (network) network.redraw();
+                }
+            });
+
+            async function sendMessage() {
+                const text = userInput.value.trim();
+                if (!text) return;
+                appendMessage('user', text);
+                userInput.value = '';
+
+                const aiBubble = appendMessage('ai', '...');
+                let buffer = "";
+
+                try {
+                    const res = await fetch('/api/chat', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            message: text,
+                            domain_id: currentDomainId,
+                            api_key: apiNode.value.trim(),
+                            base_url: baseNode.value.trim(),
+                            model: modelNode.value.trim()
+                        })
+                    });
+                    const reader = res.body.getReader();
+                    const decoder = new TextDecoder();
+                    let eventBuffer = "";
+
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        eventBuffer += decoder.decode(value);
+                        let lines = eventBuffer.split('\n\n');
+                        eventBuffer = lines.pop();
+
+                        for (let line of lines) {
+                            if (line.startsWith('data: ')) {
+                                const payload = JSON.parse(line.substring(6));
+                                if (payload.type === 'chunk') {
+                                    buffer += payload.content;
+                                    const match = buffer.match(/"reply"\s*:\s*"((?:[^"\\]|\\.)*)/);
+                                    if (match) aiBubble.innerText = match[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
+                                } else if (payload.type === 'done') {
+                                    updateGraph(payload.entities || [], payload.relations || []);
+                                    renderWithHighlights(aiBubble, payload.reply_final, payload.entities);
+                                }
+                            }
+                        }
+                    }
+                } catch (e) {
+                    aiBubble.innerText = "Error: " + e.message;
+                }
+            }
+
+            userInput.onkeypress = (e) => { if (e.key === 'Enter') sendMessage(); };
+        </script>
+    </body>
 
 </html>
