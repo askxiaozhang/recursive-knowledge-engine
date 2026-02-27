@@ -19,7 +19,8 @@ def init_local_db():
     c.execute('''CREATE TABLE IF NOT EXISTS terms (
         id TEXT PRIMARY KEY,
         label TEXT,
-        group_type TEXT
+        group_type TEXT,
+        notes TEXT
     )''')
     # 关系表
     c.execute('''CREATE TABLE IF NOT EXISTS relations (
@@ -40,6 +41,14 @@ def init_local_db():
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         created_at TEXT
     )''')
+    
+    # 检查并添加 notes 列（Migration 处理）
+    try:
+        c.execute("ALTER TABLE terms ADD COLUMN notes TEXT")
+    except sqlite3.OperationalError:
+        # 已经存在则忽略
+        pass
+
     conn.commit()
     conn.close()
 

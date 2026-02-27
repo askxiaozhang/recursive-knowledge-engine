@@ -228,6 +228,38 @@ def clear_chat():
     
     return jsonify({"code": 0, "msg": "已清空学习上下文"})
 
+@app.route("/api/notes/<node_id>", methods=["GET"])
+def get_notes(node_id):
+    user = get_current_user()
+    if not user:
+        return jsonify({"code": 1, "msg": "请先登录"}), 401
+    
+    conn = get_local_db()
+    c = conn.cursor()
+    row = c.execute('SELECT notes FROM terms WHERE id = ?', (node_id,)).fetchone()
+    conn.close()
+    
+    notes = row["notes"] if row and row["notes"] else ""
+    return jsonify({"code": 0, "notes": notes})
+
+@app.route("/api/notes/<node_id>", methods=["POST"])
+def save_notes(node_id):
+    user = get_current_user()
+    if not user:
+        return jsonify({"code": 1, "msg": "请先登录"}), 401
+    
+    data = request.json
+    notes = data.get("notes", "")
+    
+    conn = get_local_db()
+    c = conn.cursor()
+    # 确保节点存在
+    c.execute('UPDATE terms SET notes = ? WHERE id = ?', (notes, node_id))
+    conn.commit()
+    conn.close()
+    
+    return jsonify({"code": 0, "msg": "笔记已保存"})
+
 @app.route("/api/chat", methods=["POST"])
 def chat_api():
     user = get_current_user()

@@ -7,6 +7,8 @@
     <title>学习对话与知识图谱</title>
     <!-- 引入 vis-network 库，用于绘制知识图谱 -->
     <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/easymde/dist/easymde.min.css">
+    <script src="https://unpkg.com/easymde/dist/easymde.min.js"></script>
     <style>
         :root {
             --primary: #007bff;
@@ -272,6 +274,146 @@
             color: var(--primary-hover);
             background-color: rgba(0, 123, 255, 0.1);
         }
+
+        /* 中间笔记区 */
+        .notes-pane {
+            width: 400px;
+            min-width: 200px;
+            border-left: 1px solid var(--border);
+            border-right: 1px solid var(--border);
+            background: #fff;
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+
+        .notes-pane.visible {
+            display: flex;
+        }
+
+        /* 拖拽条 */
+        .resizer {
+            width: 8px;
+            cursor: col-resize;
+            background: transparent;
+            transition: background 0.2s;
+            position: relative;
+            flex-shrink: 0;
+            z-index: 10;
+        }
+
+        .resizer:hover,
+        .resizer.dragging {
+            background: rgba(0, 123, 255, 0.2);
+        }
+
+        /* 调整其他布局以支持拖拽 */
+        .graph-pane {
+            flex: 1;
+            min-width: 200px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chat-pane {
+            flex: 1;
+            min-width: 300px;
+            max-width: none;
+        }
+
+        .notes-header {
+            padding: 10px 20px;
+            border-bottom: 1px solid var(--border);
+            background: #f8f9fa;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .notes-title {
+            font-weight: bold;
+            font-size: 14px;
+            color: #333;
+        }
+
+        .close-notes {
+            cursor: pointer;
+            color: #999;
+            font-size: 18px;
+        }
+
+        .close-notes:hover {
+            color: #333;
+        }
+
+        .notes-content {
+            flex: 1;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            /* 防止超出 */
+        }
+
+        .notes-editor {
+            flex: 1;
+            width: 100%;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px;
+            font-size: 14px;
+            line-height: 1.6;
+            resize: none;
+            outline: none;
+            font-family: inherit;
+        }
+
+        .notes-editor:focus {
+            border-color: var(--primary);
+        }
+
+        /* 覆盖 EasyMDE 以支持 Flex 收缩与展开 */
+        .notes-content .EasyMDEContainer {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            width: 100%;
+        }
+
+        .notes-content .CodeMirror {
+            flex: 1;
+            overflow-y: auto;
+            border-bottom-left-radius: 8px;
+            border-bottom-right-radius: 8px;
+        }
+
+        .notes-content .editor-toolbar {
+            border-top-left-radius: 8px;
+            border-top-right-radius: 8px;
+        }
+
+        .notes-footer {
+            padding: 10px 15px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        .save-notes-btn {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 6px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+
+        .save-notes-btn:hover {
+            background: var(--primary-hover);
+        }
     </style>
 </head>
 
@@ -288,13 +430,35 @@
 
     <div class="main-container">
         <!-- 左侧：知识图谱 -->
-        <div class="graph-pane">
+        <div class="graph-pane" id="graphPane">
             <div class="pane-header">当前学习关系 (Relative Knowledge Graph)</div>
             <div id="mynetwork"></div>
         </div>
 
+        <!-- 拖拽条 1 -->
+        <div class="resizer" id="resizerLeft"></div>
+
+        <!-- 中间：笔记编辑区 -->
+        <div id="notesPane" class="notes-pane">
+            <div class="notes-header">
+                <div class="notes-title" id="notesTitle">笔记: [节点]</div>
+                <div class="close-notes" onclick="closeNotes()">&times;</div>
+            </div>
+            <div class="notes-content">
+                <textarea id="notesEditor" class="notes-editor" placeholder="在这里输入关于该节点的学习笔记..."></textarea>
+            </div>
+            <div class="notes-footer">
+                <span id="saveStatus"
+                    style="margin-right: 10px; font-size: 12px; color: #888; display: none;">已保存</span>
+                <button class="save-notes-btn" onclick="saveNotes()">保存笔记</button>
+            </div>
+        </div>
+
+        <!-- 拖拽条 2 -->
+        <div class="resizer" id="resizerRight"></div>
+
         <!-- 右侧：AI 对话 -->
-        <div class="chat-pane">
+        <div class="chat-pane" id="chatPane">
             <div class="chat-history" id="chatHistory">
                 <!-- Data will be loaded by JS -->
             </div>
@@ -359,8 +523,10 @@
 
         const network = new vis.Network(container, data, options);
 
+        let currentEditingNodeId = null;
+
         // 绑定节点点击事件：点击时清空上下文，并触发新的一轮“什么是 xxx？”
-        network.on("selectNode", async function (params) {
+        network.on("click", async function (params) {
             if (params.nodes.length > 0) {
                 const nodeId = params.nodes[0];
                 const node = nodes.get(nodeId);
@@ -380,6 +546,20 @@
                 // 3. 自动填入并发送新的问题
                 userInput.value = `什么是${nodeLabel}？`;
                 sendMessage();
+            }
+        });
+
+        // 绑定右键点击事件：取消拦截，改回系统默认，或者只在必要时拦截
+        network.on("onContext", function (params) {
+            // 不再拦截右键，让用户可以用系统右键
+        });
+
+        // 绑定双击节点事件：展开笔记
+        network.on("doubleClick", function (params) {
+            if (params.nodes.length > 0) {
+                const nodeId = params.nodes[0];
+                const node = nodes.get(nodeId);
+                openNotes(nodeId, node.label || nodeId);
             }
         });
 
@@ -432,11 +612,21 @@
 
             bubble.innerHTML = html;
 
-            // 绑定点击事件
+            // 绑定事件
             bubble.querySelectorAll('.term-highlight').forEach(el => {
+                const nodeId = el.getAttribute('data-node-id');
+                const label = el.innerText;
+
+                // 点击：图谱中高亮
                 el.onclick = (e) => {
-                    const nodeId = el.getAttribute('data-node-id');
                     highlightNodeInGraph(nodeId);
+                };
+
+                // 双击：打开笔记
+                el.ondblclick = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    openNotes(nodeId, label);
                 };
             });
         }
@@ -678,6 +868,178 @@
                 console.error(err);
             }
         }
+
+        // ==========================================
+        // 4. 笔记功能逻辑
+        // ==========================================
+        const notesPane = document.getElementById('notesPane');
+        const notesTitle = document.getElementById('notesTitle');
+        const notesEditorEle = document.getElementById('notesEditor');
+        const saveStatus = document.getElementById('saveStatus');
+
+        let easyMDE = null;
+
+        // openNotes 取消此处的重复定义，因为后面挂载到了 window.openNotes 上
+
+        function closeNotes() {
+            notesPane.classList.remove('visible');
+            currentEditingNodeId = null;
+        }
+
+        async function saveNotes() {
+            if (!currentEditingNodeId) return;
+
+            const notes = easyMDE ? easyMDE.value() : notesEditorEle.value;
+            saveStatus.innerText = '正在保存...';
+            saveStatus.style.display = 'inline';
+
+            try {
+                const res = await fetch(`/api/notes/${currentEditingNodeId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ notes: notes })
+                });
+                const data = await res.json();
+                if (data.code === 0) {
+                    saveStatus.innerText = '已保存';
+                    setTimeout(() => {
+                        if (saveStatus.innerText === '已保存') {
+                            saveStatus.style.display = 'none';
+                        }
+                    }, 2000);
+                } else {
+                    saveStatus.innerText = '保存失败';
+                }
+            } catch (err) {
+                console.error(err);
+                saveStatus.innerText = '网络错误';
+            }
+        }
+
+        // ==========================================
+        // 5. 拖拽调整宽度逻辑
+        // ==========================================
+        const graphPane = document.getElementById('graphPane');
+        const chatPane = document.getElementById('chatPane');
+        const resizerLeft = document.getElementById('resizerLeft');
+        const resizerRight = document.getElementById('resizerRight');
+
+        let isResizing = false;
+        let activeResizer = null;
+
+        resizerLeft.addEventListener('mousedown', (e) => {
+            isResizing = true;
+            activeResizer = 'left';
+            document.body.style.cursor = 'col-resize';
+            resizerLeft.classList.add('dragging');
+        });
+
+        resizerRight.addEventListener('mousedown', (e) => {
+            isResizing = true;
+            activeResizer = 'right';
+            document.body.style.cursor = 'col-resize';
+            resizerRight.classList.add('dragging');
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isResizing) return;
+
+            const containerRect = document.querySelector('.main-container').getBoundingClientRect();
+            const mouseX = e.clientX - containerRect.left;
+
+            if (activeResizer === 'left') {
+                // 调整 graphPane 的 flex-basis
+                const newWidth = Math.max(200, mouseX);
+                graphPane.style.flex = `0 0 ${newWidth}px`;
+            } else if (activeResizer === 'right') {
+                // 调整 notesPane 的宽度 (此时它是可见的)
+                if (notesPane.classList.contains('visible')) {
+                    const notesPaneRect = notesPane.getBoundingClientRect();
+                    const graphAndResizersWidth = resizerLeft.getBoundingClientRect().right - containerRect.left;
+                    const newNotesWidth = Math.max(200, mouseX - graphAndResizersWidth);
+                    notesPane.style.width = `${newNotesWidth}px`;
+                } else {
+                    // 如果笔记窗没开，resizerRight 调整的是左边 graphPane 的 fallback 宽度
+                    const newWidth = Math.max(200, mouseX);
+                    graphPane.style.flex = `0 0 ${newWidth}px`;
+                }
+            }
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (isResizing) {
+                isResizing = false;
+                document.body.style.cursor = 'default';
+                resizerLeft.classList.remove('dragging');
+                resizerRight.classList.remove('dragging');
+                // 窗口大小变化后，通知 Vis.js 重新计算图谱
+                network.redraw();
+            }
+        });
+
+        // 初始隐藏 resizerRight，因为 notesPane 默认隐藏
+        function initLayout() {
+            if (!notesPane.classList.contains('visible')) {
+                resizerRight.style.display = 'none';
+            } else {
+                resizerRight.style.display = 'block';
+            }
+        }
+
+        // 绑定到 window 以便全局调用
+        window.openNotes = async (nodeId, label) => {
+            currentEditingNodeId = nodeId;
+            notesTitle.innerText = `笔记: [${label}]`;
+            notesPane.classList.add('visible');
+            resizerRight.style.display = 'block';
+
+            if (!easyMDE) {
+                easyMDE = new EasyMDE({
+                    element: notesEditorEle,
+                    spellChecker: false,
+                    status: false,
+                    autofocus: true,
+                    maxHeight: "100%",
+                    toolbar: ["bold", "italic", "heading", "|", "quote", "unordered-list", "ordered-list", "|", "link", "image", "|", "preview"]
+                });
+            }
+
+            // 解决从 display:none 变为显示时，CodeMirror 渲染高度和宽度不对齐的问题
+            setTimeout(() => {
+                if (easyMDE && easyMDE.codemirror) {
+                    easyMDE.codemirror.refresh();
+                }
+            }, 50);
+
+            easyMDE.value('正在加载笔记...');
+
+            try {
+                const res = await fetch(`/api/notes/${nodeId}`);
+                const data = await res.json();
+                if (data.code === 0) {
+                    easyMDE.value(data.notes || '');
+                } else {
+                    easyMDE.value('加载失败: ' + data.msg);
+                }
+            } catch (err) {
+                console.error(err);
+                easyMDE.value('网络错误，加载失败。');
+            }
+            network.redraw();
+        };
+
+        window.closeNotes = () => {
+            notesPane.classList.remove('visible');
+            resizerRight.style.display = 'none';
+            currentEditingNodeId = null;
+            network.redraw();
+        };
+
+        window.saveNotes = saveNotes;
+
+        // 执行初始布局
+        initLayout();
+    </script>
     </script>
 </body>
 
