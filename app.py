@@ -113,9 +113,9 @@ def create_domain():
 
 @app.route("/api/quiz/generate", methods=["POST"])
 def gen_quiz():
-    counts = get_user_counts()
-    if counts['today_quizzes'] >= 5:
-        return jsonify({"code": 1, "msg": "今日免费额度已满 (5题)！"}), 403
+    # counts = get_user_counts()  # 已关闭限额
+    # if counts['today_quizzes'] >= 5:
+    #     return jsonify({"code": 1, "msg": "今日免费额度已满 (5题)！"}), 403
 
     data = request.json or {}
     node_label = data.get("node_label")
